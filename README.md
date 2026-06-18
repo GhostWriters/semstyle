@@ -48,6 +48,16 @@ to leave the current color unchanged, or `-` to reset that color to the terminal
 | `H` | High Intensity: shifts fg/bg to bright variant (`red` → `bright-red`) |
 | `-` (leading) | Reset all attributes first, then apply remaining flags |
 
+A leading `-` in the flags field resets all text attributes (bold, underline, etc.) without
+touching colors. It can stand alone to reset attributes only, or be combined with flags to
+reset-then-set in one step:
+
+```text
+{{[::-]}}    ← reset all attributes; fg and bg unchanged
+{{[::-B]}}   ← reset all attributes, then set bold; fg and bg unchanged
+{{[-]}}      ← reset everything (fg, bg, and all attributes)
+```
+
 ### Semantic tags
 
 Semantic tags reference a **named style** resolved at render time against a style map:
@@ -70,6 +80,8 @@ applied on top of the registered style:
 {{|Error::black|}}           ← bg overridden; fg left unchanged (empty field)
 {{|Error:-:black|}}          ← bg overridden; fg reset to terminal default
 {{|Error:yellow:-|}}         ← fg overridden; bg reset to terminal default
+{{|Error::-|}}               ← reset all attributes; fg and bg unchanged
+{{|Error::-B|}}              ← reset all attributes, then set bold; fg and bg unchanged
 ```
 
 ## Layout
