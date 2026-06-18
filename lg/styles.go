@@ -201,6 +201,20 @@ func CodeToStyle(styleCode string, style lipgloss.Style, resetStyle lipgloss.Sty
 	return style
 }
 
+// ToANSIOnBackground renders tagged text to ANSI and ensures it displays correctly
+// against the given parent background style. It prepends the parent's ANSI codes,
+// appends a reset, then calls MaintainBackground so inner resets re-assert the
+// parent colors rather than bleeding to the terminal default.
+func ToANSIOnBackground(s string, bg lipgloss.Style, prefix ...string) string {
+	rendered := semstyle.ToANSI(s, prefix...)
+	getANSI := func(st lipgloss.Style) string {
+		r := st.Render("_")
+		return strings.Split(r, "_")[0]
+	}
+	full := getANSI(bg) + rendered + semstyle.CodeReset
+	return MaintainBackground(full, bg)
+}
+
 // MaintainBackground replaces ANSI resets with the reset followed by the parent
 // style's codes, preventing content-level resets from bleeding to the terminal
 // default background. It also ensures the string starts with the parent's full
