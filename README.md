@@ -159,21 +159,25 @@ companion package, which parses theme files into a map).
 
 ## Converting to lipgloss styles
 
-`ToANSI` produces terminal escape sequences for plain output. When building a
-**lipgloss** `Style` (e.g. for a TUI component), use `semlg.ToStyle` from `semstyle/lg`
-— it resolves any semantic or direct tags and applies the result directly to a lipgloss
-style:
+`ToANSI` produces terminal escape sequences for plain output. The `semstyle/lg` package
+adds lipgloss integration — import it aliased as `semstyle` and you get the full API plus:
 
 ```go
-import semlg "github.com/GhostWriters/semstyle/lg"
+import semstyle "github.com/GhostWriters/semstyle/lg"
 
-base := lipgloss.NewStyle()
-style := semlg.ToStyle(semlg.Default, "{{|Error|}}", base, base)
+// Render tagged text against a parent container background in one call:
+out := semstyle.ToANSIOnBackground("{{|Error|}}oops{{[-]}}", parentStyle)
+
+// Build a lipgloss style from tags:
+style := semstyle.ToStyle(semstyle.Default, "{{|Error|}}", base, base)
+
+// Maintain background on already-rendered ANSI from a third-party component:
+safe := semstyle.MaintainBackground(alreadyRendered, parentStyle)
 ```
 
 Use `ToTags` directly when passing styled text to a TUI compositor that understands direct
 tags natively rather than ANSI escapes. See [lg/README.md](lg/README.md) for the full
-lipgloss API including `MaintainBackground`.
+lipgloss API.
 
 ## Delimiters
 

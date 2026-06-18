@@ -12,8 +12,15 @@ import semstyle "github.com/GhostWriters/semstyle/lg"
 
 semstyle.RegisterConsoleTag("Notice", "{{[cyan::B]}}")
 fmt.Println(semstyle.ToANSI("{{|Notice|}}hello{{[-]}}"))
+
+// Render tagged text against a parent container background in one call:
+fmt.Println(semstyle.ToANSIOnBackground("{{|Notice|}}hello{{[-]}}", parentStyle))
+
+// Or build a lipgloss style from tags:
 style := semstyle.ToStyle(semstyle.Default, "{{|Error|}}", base, base)
-safe  := semstyle.MaintainBackground(rendered, parentStyle)
+
+// Or maintain background on already-rendered ANSI (e.g. from a third-party component):
+safe := semstyle.MaintainBackground(alreadyRendered, parentStyle)
 ```
 
 ## Lipgloss API
@@ -47,21 +54,32 @@ style = semstyle.ResetFlags(style)
 
 ### Background maintenance
 
-When nesting lipgloss-rendered content inside a parent with a background color, inner ANSI
-resets bleed back to the terminal default instead of the parent's background.
-`MaintainBackground` intercepts those resets and re-asserts the parent style's colors:
+When nesting content inside a parent with a background color, inner ANSI resets bleed back
+to the terminal default instead of the parent's background. Two functions address this:
+
+**`ToANSIOnBackground`** — the common case: render tagged text and maintain the background
+in one call. Equivalent to `ToANSI` + prefix injection + reset + `MaintainBackground`:
 
 ```go
-safe := semstyle.MaintainBackground(innerRendered, parentStyle)
+out := semstyle.ToANSIOnBackground("{{|Error|}}oops{{[-]}}", parentStyle)
+// optional prefix for theme map lookup:
+out  = semstyle.ToANSIOnBackground("{{|Error|}}oops{{[-]}}", parentStyle, "preview")
 ```
 
-It handles three reset forms:
+**`MaintainBackground`** — for already-rendered ANSI strings you didn't produce yourself
+(e.g. output from a third-party lipgloss component or a viewport):
+
+```go
+safe := semstyle.MaintainBackground(alreadyRendered, parentStyle)
+```
+
+Both handle three reset forms:
 
 - `\x1b[0m` / `\x1b[m` — full reset: re-asserts fg + bg + all attributes
 - `\x1b[39m` — FG reset: re-asserts fg only
 - `\x1b[49m` — BG reset: re-asserts bg only
 
-It also ensures the string starts with the parent's full ANSI code so unstyled text
+Both also ensure the string starts with the parent's full ANSI code so unstyled text
 inherits the background automatically.
 
 ## StyleFlags
@@ -82,7 +100,9 @@ method applies all flags to a lipgloss style in one call:
 
 ## Re-exported semstyle API
 
-All `semstyle` package-level functions, constants, and variables are available directly:
+In addition to the lipgloss-specific functions above (`ToANSIOnBackground`,
+`MaintainBackground`, `ToStyle`, `CodeToStyle`, `CodeToFlags`, `ResetFlags`, `StyleFlags`),
+all `semstyle` package-level functions, constants, and variables are available directly:
 `ToANSI`, `ToTags`, `ToPlain`, `StripTags`, `StripANSI`, `Sprintf`, `ToColor`,
 `ToColorStr`, `WrapSemantic`, `WrapDirect`, `RegisterConsoleTag`, `RegisterThemeTag`,
 `RegisterHyperlinkTag`, `BuildColorMap`, `ClearThemeMap`, `SetThemeMap`, `SetRenderPolicy`,
