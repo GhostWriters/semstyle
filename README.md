@@ -125,17 +125,42 @@ syntaxes in the same process.
 
 ## Hyperlinks
 
-Hyperlinking is opt-in and keyed on a tag name (not a style flag, so theme authors don't
-have to remember anything). Register a tag, and its content up to the next reset becomes a
-terminal hyperlink, using the content's plain text as the destination:
+There are two ways to produce terminal hyperlinks (OSC 8).
+
+### Registered hyperlink tags
+
+Register a tag name — its enclosed content becomes the URL, displayed as-is:
 
 ```go
 semstyle.RegisterHyperlinkTag("URL")
-semstyle.ToConsoleANSI("{{|URL|}}https://example.com{{[-]}}") // clickable link
+semstyle.ToANSI("{{|URL|}}https://example.com{{[-]}}") // URL is both destination and label
 ```
 
-Off by default. The registration lives on the `Styler` (independent of the console/theme
-style maps), so it persists across theme changes.
+The registration lives on the `Styler` (independent of style maps), so it persists across
+theme changes.
+
+### Inline explicit hyperlinks
+
+Add a label as the final colon-field of any tag. The enclosed content is the URL; the label
+is the visible text. An empty label uses the URL as both:
+
+**Direct tag** — label is the 4th field (`fg:bg:flags:label`):
+
+```
+{{[cyan::U:DockSTARTer Website]}}https://dockstarter.com{{[-]}}
+{{[cyan::U:]}}https://dockstarter.com{{[-]}}   ← empty label: URL shown as text
+```
+
+**Semantic tag** — label is the 5th field (`name:fg:bg:flags:label`); use empty fields to
+keep the registered style with no color overrides:
+
+```
+{{|mylink:red:black:B:DockSTARTer Website|}}https://dockstarter.com{{[-]}}
+{{|mylink::::DockSTARTer Website|}}https://dockstarter.com{{[-]}}   ← no overrides
+```
+
+Both forms work whether or not the tag is also registered as a hyperlink tag — the explicit
+label always takes precedence for the display text.
 
 ## Render policy
 
