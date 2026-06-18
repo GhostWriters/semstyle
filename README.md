@@ -21,7 +21,7 @@ hyperlink support.
 
 Direct tags apply inline styling immediately: `{{[fg:bg:flags]}}…{{[-]}}`
 
-```
+```text
 {{[red:black:B]}}   ← bold red text on black background
 {{[::U]}}           ← underline only (empty fg and bg)
 {{[-]}}             ← reset all styling
@@ -49,7 +49,7 @@ empty to leave unchanged.
 Semantic tags reference a **named style** resolved at render time against a style map:
 `{{|Name|}}…{{[-]}}`
 
-```
+```text
 {{|Error|}}something went wrong{{[-]}}
 {{|Title|}}My App{{[-]}}
 ```
@@ -60,7 +60,7 @@ Semantic tags are the primary use case; direct tags are what semantic tags resol
 Semantic tags also accept optional per-use overrides in the same `fg:bg:flags` format,
 applied on top of the registered style:
 
-```
+```text
 {{|Error:yellow|}}           ← Error style but fg overridden to yellow
 {{|Error:yellow:black:BU|}}  ← fg, bg, and flags all overridden
 ```
@@ -137,19 +137,16 @@ companion package, which parses theme files into a map).
 ## Converting to lipgloss styles
 
 `ToANSI` produces terminal escape sequences for plain output. When building a
-**lipgloss** `Style` (e.g. for a TUI component), use `ToTags` first to resolve semantic
-names to raw `fg:bg:flags` codes, then feed the result into a style-builder. The
-`fg:bg:flags` direct-tag format maps cleanly onto lipgloss foreground/background/modifier
-calls — host applications typically wrap this in a helper, for example:
+**lipgloss** `Style` (e.g. for a TUI component), use `semtheme.ToStyle` instead — it
+resolves any semantic or direct tags and applies the result directly to a lipgloss style:
 
 ```go
-rawCode := semstyle.StripDelimiters(semstyle.ToTags("{{|Error|}}"))
-// rawCode = "red::B"  (or whatever Error resolves to)
-style := semtheme.CodeToStyle(rawCode, lipgloss.NewStyle(), lipgloss.NewStyle())
+base := lipgloss.NewStyle()
+style := semtheme.ToStyle(semstyle.Default, "{{|Error|}}", base, base)
 ```
 
-`ToTags` is also the right choice when passing styled text to a TUI compositor that
-understands direct tags natively rather than ANSI escapes.
+Use `ToTags` directly when passing styled text to a TUI compositor that understands direct
+tags natively rather than ANSI escapes.
 
 ## Delimiters
 
@@ -188,7 +185,7 @@ is the visible text. An empty label uses the URL as both:
 
 **Direct tag** — label is the 4th field (`fg:bg:flags:label`):
 
-```
+```text
 {{[cyan::U:DockSTARTer Website]}}https://dockstarter.com{{[-]}}
 {{[cyan::U:]}}https://dockstarter.com{{[-]}}   ← empty label: URL shown as text
 ```
@@ -196,7 +193,7 @@ is the visible text. An empty label uses the URL as both:
 **Semantic tag** — label is the 5th field (`name:fg:bg:flags:label`); use empty fields to
 keep the registered style with no color overrides:
 
-```
+```text
 {{|mylink:red:black:B:DockSTARTer Website|}}https://dockstarter.com{{[-]}}
 {{|mylink::::DockSTARTer Website|}}https://dockstarter.com{{[-]}}   ← no overrides
 ```
