@@ -6,7 +6,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.4
 	github.com/charmbracelet/colorprofile v0.4.3
 	github.com/gdamore/tcell/v3 v3.4.0
-	github.com/pelletier/go-toml/v2 v2.3.1
+	github.com/pelletier/go-toml/v2 v2.4.0
 )
 
 require (
