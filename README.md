@@ -32,7 +32,18 @@ Direct tags apply inline styling immediately: `{{[fg:bg:flags]}}…{{[-]}}`
 ```
 
 **Color values** — any named ANSI color (`red`, `bright-blue`, …), hex (`#ff8800`), empty
-to leave the current color unchanged, or `-` to reset that color to the terminal default.
+to leave the current color unchanged, `-` to reset that color to the terminal default, or
+`~` to hard-reset that color to the terminal default using a multi-parameter SGR sequence
+(useful when a compositor intercepts the standard single-parameter reset forms).
+
+The difference between `-` and `~` matters when compositing:
+
+- `-` emits a standard SGR reset (`\x1b[39m` / `\x1b[49m` / `\x1b[0m`). Tools like
+  `MaintainBackground` intercept these and re-assert the parent container's colors.
+- `~` emits a hard-reset variant (`\x1b[39;39m` / `\x1b[49;49m` / `\x1b[0;39;49m`) that
+  bypasses interception, resetting all the way to the terminal's own default colors.
+- A bare `{{[-]}}` (the close tag) uses `-`, so `MaintainBackground` will re-assert the
+  parent background — use `{{[~]}}` if you explicitly want to escape to terminal default.
 
 **Flags** (each is a single character):
 
