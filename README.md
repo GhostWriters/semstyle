@@ -7,21 +7,63 @@ named, tag-based markup and resolve it to ANSI escape sequences at render time:
 semstyle.ToANSI("{{|Error|}}failed{{[-]}}: {{[red::B]}}retry{{[-]}}")
 ```
 
-`semstyle` is built around two ideas:
-
-- **Semantic tags** — `{{|Name|}}…{{[-]}}` — reference a *named* style (e.g. `Error`,
-  `Success`, `Title`) resolved against a style map. Change the map (a theme) and every tag
-  re-styles, without touching call sites.
-- **Direct tags** — `{{[fg:bg:flags]}}…{{[-]}}` — inline ANSI styling, e.g. `{{[red:black:B]}}`
-  for bold red on black. Flags: `B`old, `D`im, `U`nderline, `I`talic, `L` blink, `R`everse,
-  `S`trikethrough (uppercase = on, lowercase = off, e.g. `b` = Bold off). `H` = High Intensity:
-  shifts the fg and/or bg color to its bright variant (`red` → `bright-red`) without affecting
-  attributes. A leading `-` in the flags field resets **all** attributes first, then applies the
-  remaining flags (e.g. `{{[-B]}}` = reset all, then Bold on — use `b` for Bold off without a
-  reset).
-
 It depends only on `lipgloss`, `colorprofile`, and `tcell/color` for color resolution — no
 application, TTY, or config coupling.
+
+## Tag format
+
+The tag format is based on the color tag syntax used by
+[cview](https://code.rocket9labs.com/tslocum/cview) /
+[tview](https://github.com/rivo/tview), extended with semantic names, additional flags, and
+hyperlink support.
+
+### Direct tags
+
+Direct tags apply inline styling immediately: `{{[fg:bg:flags]}}…{{[-]}}`
+
+```
+{{[red:black:B]}}   ← bold red text on black background
+{{[::U]}}           ← underline only (empty fg and bg)
+{{[-]}}             ← reset all styling
+```
+
+**Color values** — any named ANSI color (`red`, `bright-blue`, …), hex (`#ff8800`), or
+empty to leave unchanged.
+
+**Flags** (each is a single character):
+
+| Flag | Meaning |
+| --- | --- |
+| `B` / `b` | Bold on / off |
+| `D` / `d` | Dim on / off |
+| `U` / `u` | Underline on / off |
+| `I` / `i` | Italic on / off |
+| `L` / `l` | Blink on / off |
+| `R` / `r` | Reverse on / off |
+| `S` / `s` | Strikethrough on / off |
+| `H` | High Intensity: shifts fg/bg to bright variant (`red` → `bright-red`) |
+| `-` (leading) | Reset all attributes first, then apply remaining flags |
+
+### Semantic tags
+
+Semantic tags reference a **named style** resolved at render time against a style map:
+`{{|Name|}}…{{[-]}}`
+
+```
+{{|Error|}}something went wrong{{[-]}}
+{{|Title|}}My App{{[-]}}
+```
+
+Change the style map (load a theme) and every semantic tag re-styles — no call sites change.
+Semantic tags are the primary use case; direct tags are what semantic tags resolve *to*.
+
+Semantic tags also accept optional per-use overrides in the same `fg:bg:flags` format,
+applied on top of the registered style:
+
+```
+{{|Error:yellow|}}           ← Error style but fg overridden to yellow
+{{|Error:yellow:black:BU|}}  ← fg, bg, and flags all overridden
+```
 
 ## Layout
 
@@ -41,11 +83,11 @@ its TOML dependency.
 A process-wide `Default` styler backs the package functions. This is all most programs need:
 
 ```go
-import "…/semstyle"
+import "github.com/GhostWriters/semstyle"
 
+semstyle.RegisterConsoleTag("Notice", "{{[cyan::B]}}")
 fmt.Println(semstyle.ToANSI("{{|Notice|}}hello{{[-]}}"))
-semstyle.RegisterConsoleTag("Notice", "{{[cyan::B]}}") // define a semantic tag
-plain := semstyle.ToPlain(styled)                      // remove all tags + ANSI
+plain := semstyle.ToPlain(styled)   // remove all tags + ANSI
 ```
 
 ### 2. Per-instance `Styler` (multiple independent configs)
@@ -66,10 +108,10 @@ per-instance API are identical in behavior.
 
 Each `Styler` keeps two semantic maps:
 
-- **console map** — built-in / base tags (the defaults from `RegisterBaseTags`).
+- **console map** — built-in / base tags (registered via `RegisterConsoleTag`).
 - **theme map** — overrides loaded from a theme; takes precedence over the console map.
 
-`ToANSI` without a prefix resolves against the console map only; with a prefix it resolves
+`ToANSI` without a prefix resolves against the console map; with a prefix it resolves
 theme-first with console fallback. Supply a theme map with `SetThemeMap` (or the `semtheme`
 companion package, which parses theme files into a map).
 
@@ -111,17 +153,17 @@ understands direct tags natively rather than ANSI escapes.
 
 ## Delimiters
 
-The default delimiters are the package-level standard: `{{|`…`|}}` (semantic) and `{{[`…`]}}`
-(direct). Each `Styler` gets these at construction and can override them independently:
+The default delimiters are `{{|`…`|}}` (semantic) and `{{[`…`]}}` (direct). Each `Styler`
+gets these at construction and can override them independently:
 
 ```go
 s := semstyle.New()
-s.SetDelimiters("{|", "|}", "{[", "]}")    // this Styler only
+s.SetDelimiters("{|", "|}", "{[", "]}")   // this Styler only
 ```
 
-`semstyle.SetDelimiters(...)` (package-level) changes the standard values and applies them to
-`Default`. Delimiters are per-`Styler` state, so different stylers can use different markup
-syntaxes in the same process.
+`semstyle.SetDelimiters(...)` (package-level) changes the standard values and applies them
+to `Default`. Delimiters are per-`Styler` state, so different stylers can use different
+markup syntaxes in the same process.
 
 ## Hyperlinks
 
@@ -180,11 +222,11 @@ to a styler. It's optional — import it only for file-driven themes.
 
 ```go
 import (
-    "…/semstyle"
-    semtheme "…/semstyle/theme"
+    "github.com/GhostWriters/semstyle"
+    semtheme "github.com/GhostWriters/semstyle/theme"
 )
 
-data, _ := os.ReadFile("midnight.theme")   // your app fetches the bytes
+data, _ := os.ReadFile("midnight.theme")
 defaults, _ := semtheme.RegisterInto(data, "") // parse + register into the Default styler
 // `defaults` is the theme's opaque [defaults] table (map[string]any) for your app to interpret.
 ```
