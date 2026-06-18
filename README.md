@@ -22,13 +22,17 @@ hyperlink support.
 Direct tags apply inline styling immediately: `{{[fg:bg:flags]}}…{{[-]}}`
 
 ```text
-{{[red:black:B]}}   ← bold red text on black background
-{{[::U]}}           ← underline only (empty fg and bg)
+{{[red:black:B]}}   ← bold red on black
+{{[::U]}}           ← underline only; fg and bg unchanged
+{{[green]}}         ← change fg only; bg and flags unchanged
+{{[:blue]}}         ← change bg only; fg and flags unchanged
+{{[-:blue]}}        ← reset fg to default, set bg to blue
+{{[red:-]}}         ← set fg to red, reset bg to default
 {{[-]}}             ← reset all styling
 ```
 
-**Color values** — any named ANSI color (`red`, `bright-blue`, …), hex (`#ff8800`), or
-empty to leave unchanged.
+**Color values** — any named ANSI color (`red`, `bright-blue`, …), hex (`#ff8800`), empty
+to leave the current color unchanged, or `-` to reset that color to the terminal default.
 
 **Flags** (each is a single character):
 
@@ -63,6 +67,9 @@ applied on top of the registered style:
 ```text
 {{|Error:yellow|}}           ← Error style but fg overridden to yellow
 {{|Error:yellow:black:BU|}}  ← fg, bg, and flags all overridden
+{{|Error::black|}}           ← bg overridden; fg left unchanged (empty field)
+{{|Error:-:black|}}          ← bg overridden; fg reset to terminal default
+{{|Error:yellow:-|}}         ← fg overridden; bg reset to terminal default
 ```
 
 ## Layout
