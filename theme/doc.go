@@ -2,6 +2,9 @@
 // theme files into resolved semantic style maps and registers them into a
 // [semstyle.Styler].
 //
+// It has no lipgloss dependency. For lipgloss style conversion use the
+// companion [semlg] package (semstyle/lg).
+//
 // # Theme file format
 //
 // A theme is a TOML file with four sections:
@@ -37,20 +40,4 @@
 //	styles, _ := semtheme.ResolveColors(tf)
 //	s := semstyle.New()
 //	s.SetThemeMap(styles)
-//
-// # Lipgloss style conversion
-//
-// When building TUI components with lipgloss rather than writing ANSI to a
-// terminal, use the style conversion functions to apply semstyle tags to a
-// [lipgloss.Style]:
-//
-//	// From a tagged string:
-//	style := semtheme.ToStyle(semstyle.Default, "{{|Error|}}", base, base)
-//
-//	// From a raw fg:bg:flags code:
-//	style := semtheme.CodeToStyle("red::B", base, base)
-//
-//	// Parse flags only:
-//	flags := semtheme.CodeToFlags("red::B")
-//	style = flags.Apply(style)
 package semtheme
