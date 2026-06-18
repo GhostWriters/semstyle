@@ -86,14 +86,18 @@ applied on top of the registered style:
 
 ## Layout
 
-- **`semstyle`** (this package) — the styling engine. Import it alone if you only need
-  tag-based styling and define styles in code.
+- **`semstyle`** (this package) — the pure-ANSI styling engine. No lipgloss dependency.
+  Import it alone if you only need tag-based styling and define styles in code.
+- **`semstyle/lg`** — lipgloss integration layer. Re-exports the full `semstyle` API so
+  most TUI applications only need this one import. Adds `MaintainBackground`, `ToStyle`,
+  `CodeToStyle`, `CodeToFlags`, and `StyleFlags`. See [lg/README.md](lg/README.md).
 - **`semstyle/theme`** — an optional layer that parses theme **files** (TOML) into style
-  maps for the engine. Import it only if you want file-driven themes; it pulls in a TOML
-  parser. See [theme/README.md](theme/README.md) and the [Theming](#theming) section below.
+  maps for the engine. No lipgloss dependency. Import it only if you want file-driven
+  themes; it pulls in a TOML parser. See [theme/README.md](theme/README.md) and the
+  [Theming](#theming) section below.
 
-They're one module, two packages: styling-only consumers never compile the theme package or
-its TOML dependency.
+They're one module, three packages. Pure-ANSI consumers import only `semstyle`; TUI
+applications typically import only `semstyle/lg` (which re-exports `semstyle`).
 
 ## Two ways to use it
 
@@ -156,16 +160,20 @@ companion package, which parses theme files into a map).
 ## Converting to lipgloss styles
 
 `ToANSI` produces terminal escape sequences for plain output. When building a
-**lipgloss** `Style` (e.g. for a TUI component), use `semtheme.ToStyle` instead — it
-resolves any semantic or direct tags and applies the result directly to a lipgloss style:
+**lipgloss** `Style` (e.g. for a TUI component), use `semlg.ToStyle` from `semstyle/lg`
+— it resolves any semantic or direct tags and applies the result directly to a lipgloss
+style:
 
 ```go
+import semlg "github.com/GhostWriters/semstyle/lg"
+
 base := lipgloss.NewStyle()
-style := semtheme.ToStyle(semstyle.Default, "{{|Error|}}", base, base)
+style := semlg.ToStyle(semlg.Default, "{{|Error|}}", base, base)
 ```
 
 Use `ToTags` directly when passing styled text to a TUI compositor that understands direct
-tags natively rather than ANSI escapes.
+tags natively rather than ANSI escapes. See [lg/README.md](lg/README.md) for the full
+lipgloss API including `MaintainBackground`.
 
 ## Delimiters
 
