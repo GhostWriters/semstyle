@@ -286,13 +286,13 @@ func TestInlineHyperlinks(t *testing.T) {
 
 	// With explicit label
 	result := st.ToANSI(`{{[magenta:black:B:DockSTARTer Website]}}https://dockstarter.com{{[-]}}`)
-	if !strings.Contains(result, "\x1b]8;;https://dockstarter.com\x1b\\") {
+	if !strings.Contains(result, "\x1b]8;;https://dockstarter.com\a") {
 		t.Errorf("expected OSC8 hyperlink open, got: %q", result)
 	}
 	if !strings.Contains(result, "DockSTARTer Website") {
 		t.Errorf("expected label text in output, got: %q", result)
 	}
-	if !strings.Contains(result, "\x1b]8;;\x1b\\") {
+	if !strings.Contains(result, "\x1b]8;;\a") {
 		t.Errorf("expected OSC8 hyperlink close, got: %q", result)
 	}
 
@@ -301,7 +301,7 @@ func TestInlineHyperlinks(t *testing.T) {
 	if !strings.Contains(result2, "https://dockstarter.com") {
 		t.Errorf("expected URL as label when label empty, got: %q", result2)
 	}
-	if !strings.Contains(result2, "\x1b]8;;https://dockstarter.com\x1b\\") {
+	if !strings.Contains(result2, "\x1b]8;;https://dockstarter.com\a") {
 		t.Errorf("expected OSC8 hyperlink, got: %q", result2)
 	}
 
@@ -314,7 +314,7 @@ func TestInlineHyperlinks(t *testing.T) {
 	// Semantic tag with full fields + label
 	st.RegisterConsoleTag("mylink", "cyan::U")
 	result4 := st.ToANSI(`{{|mylink:::B:DockSTARTer Website|}}https://dockstarter.com{{[-]}}`)
-	if !strings.Contains(result4, "\x1b]8;;https://dockstarter.com\x1b\\") {
+	if !strings.Contains(result4, "\x1b]8;;https://dockstarter.com\a") {
 		t.Errorf("semantic: expected OSC8 hyperlink open, got: %q", result4)
 	}
 	if !strings.Contains(result4, "DockSTARTer Website") {
@@ -323,7 +323,7 @@ func TestInlineHyperlinks(t *testing.T) {
 
 	// Semantic tag with no color overrides + label (4 empty fields before label)
 	result5 := st.ToANSI(`{{|mylink::::DockSTARTer Website|}}https://dockstarter.com{{[-]}}`)
-	if !strings.Contains(result5, "\x1b]8;;https://dockstarter.com\x1b\\") {
+	if !strings.Contains(result5, "\x1b]8;;https://dockstarter.com\a") {
 		t.Errorf("semantic no-override: expected OSC8 hyperlink, got: %q", result5)
 	}
 	if !strings.Contains(result5, "DockSTARTer Website") {

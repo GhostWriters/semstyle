@@ -23,7 +23,7 @@ func TestHyperlinkRegisteredAndExplicit(t *testing.T) {
 
 	// Explicit label form — overrides display text even though tag is registered
 	r2 := st.ToANSI(`{{|mylink::::DockSTARTer Website|}}https://dockstarter.com{{[-]}}`)
-	if !strings.Contains(r2, "\x1b]8;;https://dockstarter.com\x1b\\") {
+	if !strings.Contains(r2, "\x1b]8;;https://dockstarter.com\a") {
 		t.Errorf("explicit label: expected URL as destination, got %q", r2)
 	}
 	if !strings.Contains(r2, "DockSTARTer Website") {

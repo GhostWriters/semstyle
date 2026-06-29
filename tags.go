@@ -379,7 +379,7 @@ func (st *Styler) processInlineHyperlinks(text string) string {
 			styleANSI = st.parseStyleCodeToANSI(styleCode)
 		}
 
-		hyperlink := fmt.Sprintf("\x1b]8;;%s\x1b\\%s%s%s\x1b]8;;\x1b\\", url, styleANSI, label, CodeReset)
+		hyperlink := lipgloss.NewStyle().Hyperlink(url).Render(styleANSI + label + CodeReset)
 
 		out.WriteString(slice[:tagStart])
 		out.WriteString(hyperlink)
