@@ -43,6 +43,27 @@ func TestRegisterThemeTagMultiPart(t *testing.T) {
 	}
 }
 
+// TestToTagsEmptyPrefixConsoleFallback verifies that ToTags with an empty prefix
+// (theme map + console fallback) correctly falls back to the console map when the
+// tag is not in the theme map.
+func TestToTagsEmptyPrefixConsoleFallback(t *testing.T) {
+	st := New()
+	st.RegisterConsoleTag("timestamp", "{{[-]}}{{[gray::D]}}")
+
+	// No prefix: console map only — must work.
+	got := st.ToTags("{{|timestamp|}}")
+	want := "{{[-]}}{{[gray::D]}}"
+	if got != want {
+		t.Errorf("ToTags no prefix: got %q, want %q", got, want)
+	}
+
+	// Empty prefix: theme map with console fallback — must also find it.
+	got2 := st.ToTags("{{|timestamp|}}", "")
+	if got2 != want {
+		t.Errorf("ToTags empty prefix console fallback: got %q, want %q", got2, want)
+	}
+}
+
 // TestRegisterConsoleTagMultiPartWithFlags verifies a multi-part value that includes
 // flag modifiers (bold, dim) also round-trips correctly.
 func TestRegisterConsoleTagMultiPartWithFlags(t *testing.T) {

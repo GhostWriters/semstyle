@@ -176,6 +176,9 @@ func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, str
 				if !ok {
 					rawCode, ok = styleMap[content]
 				}
+				if !ok {
+					rawCode, ok = st.consoleMap[content]
+				}
 			} else {
 				if prefix != "" {
 					rawCode, ok = st.themeMap[prefix+content]
