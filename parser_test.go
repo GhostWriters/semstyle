@@ -71,6 +71,21 @@ func TestStrip(t *testing.T) {
 	}
 }
 
+func TestToPlainInlineHyperlink(t *testing.T) {
+	// Inline label form: {{|Tag::::label|}}url{{[-]}} should strip to label, not URL.
+	input := "{{|App::::bazarr|}}https://dockstarter.com/apps/bazarr/{{[-]}}"
+	got := ToPlain(input)
+	if got != "bazarr" {
+		t.Errorf("ToPlain inline hyperlink: got %q, want %q", got, "bazarr")
+	}
+	// Without label field: content should be stripped along with tags.
+	input2 := "{{|App|}}bazarr{{[-]}}"
+	got2 := ToPlain(input2)
+	if got2 != "bazarr" {
+		t.Errorf("ToPlain plain semantic: got %q, want %q", got2, "bazarr")
+	}
+}
+
 func TestStripANSI(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -286,7 +301,7 @@ func TestInlineHyperlinks(t *testing.T) {
 
 	// With explicit label
 	result := st.ToANSI(`{{[magenta:black:B:DockSTARTer Website]}}https://dockstarter.com{{[-]}}`)
-	if !strings.Contains(result, "\x1b]8;;https://dockstarter.com\a") {
+	if !strings.Contains(result, "\x1b]8;id=2936416067;https://dockstarter.com\a") {
 		t.Errorf("expected OSC8 hyperlink open, got: %q", result)
 	}
 	if !strings.Contains(result, "DockSTARTer Website") {
@@ -301,7 +316,7 @@ func TestInlineHyperlinks(t *testing.T) {
 	if !strings.Contains(result2, "https://dockstarter.com") {
 		t.Errorf("expected URL as label when label empty, got: %q", result2)
 	}
-	if !strings.Contains(result2, "\x1b]8;;https://dockstarter.com\a") {
+	if !strings.Contains(result2, "\x1b]8;id=2936416067;https://dockstarter.com\a") {
 		t.Errorf("expected OSC8 hyperlink, got: %q", result2)
 	}
 
@@ -314,7 +329,7 @@ func TestInlineHyperlinks(t *testing.T) {
 	// Semantic tag with full fields + label
 	st.RegisterConsoleTag("mylink", "cyan::U")
 	result4 := st.ToANSI(`{{|mylink:::B:DockSTARTer Website|}}https://dockstarter.com{{[-]}}`)
-	if !strings.Contains(result4, "\x1b]8;;https://dockstarter.com\a") {
+	if !strings.Contains(result4, "\x1b]8;id=2936416067;https://dockstarter.com\a") {
 		t.Errorf("semantic: expected OSC8 hyperlink open, got: %q", result4)
 	}
 	if !strings.Contains(result4, "DockSTARTer Website") {
@@ -323,7 +338,7 @@ func TestInlineHyperlinks(t *testing.T) {
 
 	// Semantic tag with no color overrides + label (4 empty fields before label)
 	result5 := st.ToANSI(`{{|mylink::::DockSTARTer Website|}}https://dockstarter.com{{[-]}}`)
-	if !strings.Contains(result5, "\x1b]8;;https://dockstarter.com\a") {
+	if !strings.Contains(result5, "\x1b]8;id=2936416067;https://dockstarter.com\a") {
 		t.Errorf("semantic no-override: expected OSC8 hyperlink, got: %q", result5)
 	}
 	if !strings.Contains(result5, "DockSTARTer Website") {

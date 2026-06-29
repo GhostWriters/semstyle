@@ -2,6 +2,7 @@ package semstyle
 
 import (
 	"fmt"
+	"hash/fnv"
 	"regexp"
 	"strings"
 
@@ -286,9 +287,29 @@ func (st *Styler) ToANSI(s string, prefix ...string) string {
 	return st.processDirectTags(s)
 }
 
+// inlineLabelRegex matches inline hyperlink tag+content blocks and captures the display label.
+// Handles both semantic ({{|Name::::label|}}) and direct ({{[::flags:label]}}) forms.
+// The label is the last colon-separated field; content between tag and reset is the URL.
+var inlineSemLabelRegex = regexp.MustCompile(`\{\{\|[^|]*::::[^|]+\|\}\}[^{]*\{\{(?:\[-\]|)\}\}`)
+var inlineDirLabelRegex = regexp.MustCompile(`\{\{\[[^\]]*:::[^:]*:[^\]]+\]\}\}[^{]*\{\{(?:\[-\]|)\}\}`)
+
 // ToPlain removes all semantic tags, direct tags, and ANSI escape sequences, returning
-// plain undecorated text.
+// plain undecorated text. Inline hyperlink tags (with a label field) are replaced with
+// their display label rather than the URL content.
 func (st *Styler) ToPlain(s string) string {
+	// Replace inline hyperlink blocks with just the display label.
+	s = inlineSemLabelRegex.ReplaceAllStringFunc(s, func(m string) string {
+		// Extract label from {{|Name::::label|}} — everything after last "::::"
+		end := strings.Index(m, "|}}")
+		if end < 0 {
+			return m
+		}
+		tag := m[:end]
+		if idx := strings.LastIndex(tag, "::::"); idx >= 0 {
+			return tag[idx+4:]
+		}
+		return m
+	})
 	s = st.semanticRegex.ReplaceAllString(s, "")
 	s = st.directRegex.ReplaceAllString(s, "")
 	return StripANSI(s)
@@ -379,7 +400,10 @@ func (st *Styler) processInlineHyperlinks(text string) string {
 			styleANSI = st.parseStyleCodeToANSI(styleCode)
 		}
 
-		hyperlink := lipgloss.NewStyle().Hyperlink(url).Render(styleANSI + label + CodeReset)
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(url))
+		linkID := fmt.Sprintf("id=%d", h.Sum32())
+		hyperlink := lipgloss.NewStyle().Hyperlink(url, linkID).Render(styleANSI + label + CodeReset)
 
 		out.WriteString(slice[:tagStart])
 		out.WriteString(hyperlink)
