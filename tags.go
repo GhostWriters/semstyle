@@ -189,7 +189,14 @@ func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, str
 			}
 
 			if ok {
-				result := st.WrapDirect(rawCode)
+				// If the stored value already contains delimiters it is a multi-tag
+				// string; return it as-is rather than re-wrapping as a single tag.
+				var result string
+				if strings.Contains(rawCode, st.dirPre) || strings.Contains(rawCode, st.semPre) {
+					result = rawCode
+				} else {
+					result = st.WrapDirect(rawCode)
+				}
 				if modifiers != "" {
 					result += st.WrapDirect(modifiers)
 				}

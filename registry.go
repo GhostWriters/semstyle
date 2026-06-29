@@ -91,7 +91,15 @@ func (st *Styler) BuildColorMap() {
 
 // RegisterConsoleTag registers a semantic tag with its standardized tag value in the console map.
 func (st *Styler) RegisterConsoleTag(name, taggedValue string) {
-	st.RegisterConsoleTagRaw(name, st.StripDelimiters(taggedValue))
+	stripped := st.StripDelimiters(taggedValue)
+	// If stripping produced a value that still contains delimiters the input was
+	// multi-part (e.g. "{{[-]}}{{[gray::D]}}"); store the original tagged form so
+	// ExpandTagsWithMap can return it intact rather than re-wrapping as one tag.
+	if strings.Contains(stripped, st.dirPre) || strings.Contains(stripped, st.semPre) {
+		st.RegisterConsoleTagRaw(name, taggedValue)
+	} else {
+		st.RegisterConsoleTagRaw(name, stripped)
+	}
 }
 
 // RegisterConsoleTagRaw registers a semantic tag with a raw style code in the console map.
@@ -104,7 +112,12 @@ func (st *Styler) RegisterConsoleTagRaw(name, rawValue string) {
 
 // RegisterThemeTag registers a semantic tag with its standardized tag value in the theme map.
 func (st *Styler) RegisterThemeTag(name, taggedValue string) {
-	st.RegisterThemeTagRaw(name, st.StripDelimiters(taggedValue))
+	stripped := st.StripDelimiters(taggedValue)
+	if strings.Contains(stripped, st.dirPre) || strings.Contains(stripped, st.semPre) {
+		st.RegisterThemeTagRaw(name, taggedValue)
+	} else {
+		st.RegisterThemeTagRaw(name, stripped)
+	}
 }
 
 // RegisterThemeTagRaw registers a semantic tag with a raw style code in the theme map.
