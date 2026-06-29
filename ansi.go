@@ -145,8 +145,14 @@ FoundBG:
 
 var ansiRegex = regexp.MustCompile("[\u001B\u009B][[\\]()#;?]*((?:[a-zA-Z\\d]*(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\u0007|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-ntqry=><~]))")
 
-// StripANSI removes all ANSI escape sequences from a string
+// oscStRegex matches OSC sequences terminated by ST (\x1b\\) rather than BEL (\x07),
+// which ansiRegex does not cover. Used to strip hyperlinks (OSC 8) and similar sequences.
+var oscStRegex = regexp.MustCompile("\x1b][^\x1b]*\x1b\\\\")
+
+// StripANSI removes all ANSI escape sequences from a string, including OSC sequences
+// terminated by ST (\x1b\\) such as terminal hyperlinks (OSC 8).
 func StripANSI(text string) string {
+	text = oscStRegex.ReplaceAllString(text, "")
 	return ansiRegex.ReplaceAllString(text, "")
 }
 
