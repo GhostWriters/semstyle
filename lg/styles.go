@@ -51,7 +51,7 @@ func ResetFlags(s lipgloss.Style) lipgloss.Style {
 // ToStyle resolves any semantic or direct tags in text and applies the resulting
 // style to the provided lipgloss.Style, resetting to resetStyle on a reset tag.
 func ToStyle(st *semstyle.Styler, text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
-	translated := st.ToTags(text)
+	translated := st.ToTags(text, "")
 	re := st.GetDelimitedRegex()
 	for _, subMatch := range re.FindAllStringSubmatch(translated, -1) {
 		semantic := subMatch[1]

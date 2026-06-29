@@ -84,6 +84,7 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 
 	var finalFG, finalBG string
 	var finalFlags string
+	var flagsWereReset bool
 
 	mergeStyle := func(styleStr string) {
 		inner := styleStr
@@ -108,9 +109,14 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 			finalBG = parts[1]
 		}
 		if len(parts) > 2 {
-			for _, f := range parts[2] {
-				finalFlags += string(f)
+			flagStr := parts[2]
+			if strings.HasPrefix(flagStr, "-") {
+				// Leading dash resets all accumulated flags before applying the new ones.
+				finalFlags = ""
+				flagStr = flagStr[1:]
+				flagsWereReset = true
 			}
+			finalFlags += flagStr
 		}
 	}
 
@@ -191,7 +197,11 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 		cur = cur[end:]
 	}
 
-	return fmt.Sprintf("%s:%s:%s", finalFG, finalBG, finalFlags), nil
+	resolvedFlags := finalFlags
+	if flagsWereReset && resolvedFlags != "" {
+		resolvedFlags = "-" + resolvedFlags
+	}
+	return fmt.Sprintf("%s:%s:%s", finalFG, finalBG, resolvedFlags), nil
 }
 
 // ResolveValue resolves a single theme value string against rawValues, returning a raw
