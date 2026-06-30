@@ -5,15 +5,15 @@ author      = "semstyle examples"
 
 [palette]
 accent = "#00CFFF"
-warn   = "#FFB347"
 ok     = "#90EE90"
-dim    = "white"
 
 [styles]
+# Notice and Success pull from the palette; Warn and Muted use colors
+# directly, showing palette references and inline colors both work.
 Notice  = "{{[$accent]}}"
-Warn    = "{{[$warn]}}"
+Warn    = "{{[#FFB347]}}"
 Success = "{{[$ok::B]}}"
-Muted   = "{{[$dim]}}"
+Muted   = "{{[white]}}"
 
 # Styles can reference other styles by name and layer modifier overrides on top.
 NoticeBold = "{{|Notice:::B|}}"
