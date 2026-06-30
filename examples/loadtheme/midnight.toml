@@ -7,7 +7,7 @@ author      = "semstyle examples"
 accent = "#00CFFF"
 warn   = "#FFB347"
 ok     = "#90EE90"
-dim    = "#777777"
+dim    = "white"
 
 [styles]
 Notice  = "{{[$accent]}}"
