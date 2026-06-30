@@ -352,3 +352,30 @@ func TestInlineHyperlinks(t *testing.T) {
 	}
 }
 
+// TestInlineHyperlinkUsesThemePrefix verifies that styling an inline-hyperlink semantic
+// tag resolves through the theme map (using the caller's prefix) rather than silently
+// falling back to the console map, which previously dropped the prefix on the recursive
+// ToANSI call used to resolve the tag's own style.
+func TestInlineHyperlinkUsesThemePrefix(t *testing.T) {
+	SetPreferredProfile(colorprofile.TrueColor)
+	st := New()
+	st.ensureMaps()
+
+	// "themeonly" has different colors in the console map vs a prefixed theme map.
+	st.consoleMap["themeonly"] = "red"
+	st.themeMap["mythemethemeonly"] = "cyan"
+
+	consoleResult := st.ToANSI(`{{|ThemeOnly::::https://dockstarter.com|}}text{{[-]}}`)
+	themeResult := st.ToANSI(`{{|ThemeOnly::::https://dockstarter.com|}}text{{[-]}}`, "mytheme")
+
+	if !strings.Contains(consoleResult, "\x1b[31m") {
+		t.Errorf("expected console (no prefix) result to use console color (red), got: %q", consoleResult)
+	}
+	if strings.Contains(themeResult, "\x1b[31m") {
+		t.Errorf("theme-prefixed result unexpectedly used console color (red), got: %q", themeResult)
+	}
+	if !strings.Contains(themeResult, "\x1b[36m") {
+		t.Errorf("expected theme-prefixed result to use theme color (cyan), got: %q", themeResult)
+	}
+}
+

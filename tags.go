@@ -282,7 +282,7 @@ func (st *Styler) ToANSI(s string, prefix ...string) string {
 		return st.ToPlain(s)
 	}
 	s = st.processHyperlinks(s)
-	s = st.processInlineHyperlinks(s)
+	s = st.processInlineHyperlinks(s, prefix...)
 	s = st.ToTags(s, prefix...)
 	return st.processDirectTags(s)
 }
@@ -305,7 +305,7 @@ func (st *Styler) ToPlain(s string) string {
 // display text. An empty URL field uses the content as both destination and display text
 // (matching RegisterHyperlinkTag's behavior). Tags without this field are left untouched
 // for later processing.
-func (st *Styler) processInlineHyperlinks(text string) string {
+func (st *Styler) processInlineHyperlinks(text string, prefix ...string) string {
 	dirContentIdx := st.directRegex.SubexpIndex("content")
 	dirLabelIdx := st.directRegex.SubexpIndex("label")
 	semContentIdx := st.semanticRegex.SubexpIndex("content")
@@ -377,7 +377,7 @@ func (st *Styler) processInlineHyperlinks(text string) string {
 
 		var styleANSI string
 		if isSemantic {
-			styleANSI = st.ToANSI(st.semPre + styleCode + st.semSuf)
+			styleANSI = st.ToANSI(st.semPre+styleCode+st.semSuf, prefix...)
 		} else {
 			styleANSI = st.parseStyleCodeToANSI(styleCode)
 		}
