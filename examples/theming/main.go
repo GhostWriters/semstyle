@@ -42,7 +42,9 @@ func main() {
 	_ = defaults // themes can carry app-specific [defaults] metadata
 
 	fmt.Println("--- After theme ---")
-	fmt.Println(semstyle.ToANSI("{{|Notice|}}info{{[-]}}  {{|Warn|}}warn{{[-]}}  {{|Success|}}ok{{[-]}}"))
+	// Theme-registered styles live in the theme map, so resolving them requires
+	// passing a prefix arg to ToANSI (empty string selects the unprefixed theme map).
+	fmt.Println(semstyle.ToANSI("{{|Notice|}}info{{[-]}}  {{|Warn|}}warn{{[-]}}  {{|Success|}}ok{{[-]}}", ""))
 
 	// Per-instance Styler: independent style surface, unaffected by Default.
 	st := semstyle.New()

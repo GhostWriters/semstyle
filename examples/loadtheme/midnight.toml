@@ -1,0 +1,22 @@
+[metadata]
+name        = "Midnight"
+description = "A small cool-toned theme demonstrating loading from an actual file on disk."
+author      = "semstyle examples"
+
+[palette]
+accent = "#00CFFF"
+warn   = "#FFB347"
+ok     = "#90EE90"
+dim    = "#777777"
+
+[styles]
+Notice  = "{{[$accent]}}"
+Warn    = "{{[$warn]}}"
+Success = "{{[$ok::B]}}"
+Muted   = "{{[$dim]}}"
+
+# Styles can reference other styles by name and layer modifier overrides on top.
+NoticeBold = "{{|Notice:::B|}}"
+
+[defaults]
+border_color = "$accent"
