@@ -14,21 +14,21 @@ func main() {
 	semstyle.RegisterHyperlinkTag("URL")
 	fmt.Println(semstyle.ToANSI("Visit {{|URL|}}https://github.com/GhostWriters/semstyle{{[-]}} for docs."))
 
-	// Method 2: explicit label as the last colon-field of a direct tag.
-	// Format: {{[fg:bg:flags:label]}}URL{{[-]}}
+	// Method 2: explicit URL as the last colon-field of a direct tag.
+	// Format: {{[fg:bg:flags:url]}}Display Text{{[-]}}
 	fmt.Println(semstyle.ToANSI(
-		"{{[cyan::U:semstyle on GitHub]}}https://github.com/GhostWriters/semstyle{{[-]}}",
+		"{{[cyan::U:https://github.com/GhostWriters/semstyle]}}semstyle on GitHub{{[-]}}",
 	))
 
-	// Method 3: semantic tag with explicit label.
-	// Format: {{|name:fg:bg:flags:label|}}URL{{[-]}}
+	// Method 3: semantic tag with explicit URL.
+	// Format: {{|name:fg:bg:flags:url|}}Display Text{{[-]}}
 	// Empty fields inherit the registered style.
 	semstyle.RegisterConsoleTag("Link", "{{[cyan::U]}}")
 	fmt.Println(semstyle.ToANSI(
-		"{{|Link::::semstyle on GitHub|}}https://github.com/GhostWriters/semstyle{{[-]}}",
+		"{{|Link::::https://github.com/GhostWriters/semstyle|}}semstyle on GitHub{{[-]}}",
 	))
 
-	// Empty label: URL is used as both the link target and visible text.
+	// Empty URL field: content is used as both the link target and visible text.
 	fmt.Println(semstyle.ToANSI(
 		"{{[cyan::U:]}}https://github.com/GhostWriters/semstyle{{[-]}}",
 	))

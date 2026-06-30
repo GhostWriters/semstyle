@@ -72,8 +72,8 @@ func TestStrip(t *testing.T) {
 }
 
 func TestToPlainInlineHyperlink(t *testing.T) {
-	// Inline label form: {{|Tag::::label|}}url{{[-]}} should strip to label, not URL.
-	input := "{{|App::::bazarr|}}https://dockstarter.com/apps/bazarr/{{[-]}}"
+	// Inline URL form: {{|Tag::::url|}}label{{[-]}} should strip to label, not URL.
+	input := "{{|App::::https://dockstarter.com/apps/bazarr/|}}bazarr{{[-]}}"
 	got := ToPlain(input)
 	if got != "bazarr" {
 		t.Errorf("ToPlain inline hyperlink: got %q, want %q", got, "bazarr")
@@ -299,8 +299,8 @@ func TestInlineHyperlinks(t *testing.T) {
 	SetPreferredProfile(colorprofile.TrueColor)
 	st := New()
 
-	// With explicit label
-	result := st.ToANSI(`{{[magenta:black:B:DockSTARTer Website]}}https://dockstarter.com{{[-]}}`)
+	// With explicit URL
+	result := st.ToANSI(`{{[magenta:black:B:https://dockstarter.com]}}DockSTARTer Website{{[-]}}`)
 	if !strings.Contains(result, "\x1b]8;id=2936416067;https://dockstarter.com\a") {
 		t.Errorf("expected OSC8 hyperlink open, got: %q", result)
 	}
@@ -311,24 +311,24 @@ func TestInlineHyperlinks(t *testing.T) {
 		t.Errorf("expected OSC8 hyperlink close, got: %q", result)
 	}
 
-	// With empty label — URL used as both link and display text
+	// With empty URL field — content used as both link and display text
 	result2 := st.ToANSI(`{{[cyan::U:]}}https://dockstarter.com{{[-]}}`)
 	if !strings.Contains(result2, "https://dockstarter.com") {
-		t.Errorf("expected URL as label when label empty, got: %q", result2)
+		t.Errorf("expected content as label when URL field empty, got: %q", result2)
 	}
 	if !strings.Contains(result2, "\x1b]8;id=2936416067;https://dockstarter.com\a") {
 		t.Errorf("expected OSC8 hyperlink, got: %q", result2)
 	}
 
-	// Non-hyperlink tag (no label field) must still render normally
+	// Non-hyperlink tag (no URL field) must still render normally
 	result3 := st.ToANSI(`{{[red::B]}}hello{{[-]}}`)
 	if strings.Contains(result3, "\x1b]8;") {
 		t.Errorf("plain tag should not produce hyperlink, got: %q", result3)
 	}
 
-	// Semantic tag with full fields + label
+	// Semantic tag with full fields + URL
 	st.RegisterConsoleTag("mylink", "cyan::U")
-	result4 := st.ToANSI(`{{|mylink:::B:DockSTARTer Website|}}https://dockstarter.com{{[-]}}`)
+	result4 := st.ToANSI(`{{|mylink:::B:https://dockstarter.com|}}DockSTARTer Website{{[-]}}`)
 	if !strings.Contains(result4, "\x1b]8;id=2936416067;https://dockstarter.com\a") {
 		t.Errorf("semantic: expected OSC8 hyperlink open, got: %q", result4)
 	}
@@ -336,8 +336,8 @@ func TestInlineHyperlinks(t *testing.T) {
 		t.Errorf("semantic: expected label in output, got: %q", result4)
 	}
 
-	// Semantic tag with no color overrides + label (4 empty fields before label)
-	result5 := st.ToANSI(`{{|mylink::::DockSTARTer Website|}}https://dockstarter.com{{[-]}}`)
+	// Semantic tag with no color overrides + URL (4 empty fields before URL)
+	result5 := st.ToANSI(`{{|mylink::::https://dockstarter.com|}}DockSTARTer Website{{[-]}}`)
 	if !strings.Contains(result5, "\x1b]8;id=2936416067;https://dockstarter.com\a") {
 		t.Errorf("semantic no-override: expected OSC8 hyperlink, got: %q", result5)
 	}

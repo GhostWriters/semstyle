@@ -50,15 +50,15 @@
 //	semstyle.RegisterHyperlinkTag("URL")
 //	semstyle.ToANSI("{{|URL|}}https://example.com{{[-]}}")
 //
-// Or use an explicit label as the final colon-field of any tag. The enclosed
-// content is the URL; the label is the visible text. Empty label uses the URL
-// as both:
+// Or use an explicit URL as the final colon-field of any tag. The enclosed
+// content is the visible text; the field is the URL. An empty field uses the
+// content as both:
 //
-//	// Direct tag: fg:bg:flags:label
-//	semstyle.ToANSI("{{[cyan::U:DockSTARTer Website]}}https://dockstarter.com{{[-]}}")
+//	// Direct tag: fg:bg:flags:url
+//	semstyle.ToANSI("{{[cyan::U:https://dockstarter.com]}}DockSTARTer Website{{[-]}}")
 //
-//	// Semantic tag: name:fg:bg:flags:label (empty fields keep registered style)
-//	semstyle.ToANSI("{{|mylink::::DockSTARTer Website|}}https://dockstarter.com{{[-]}}")
+//	// Semantic tag: name:fg:bg:flags:url (empty fields keep registered style)
+//	semstyle.ToANSI("{{|mylink::::https://dockstarter.com|}}DockSTARTer Website{{[-]}}")
 //
 // # Render policy
 //

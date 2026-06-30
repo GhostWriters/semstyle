@@ -287,42 +287,24 @@ func (st *Styler) ToANSI(s string, prefix ...string) string {
 	return st.processDirectTags(s)
 }
 
-// inlineLabelRegex matches inline hyperlink tag+content blocks and captures the display label.
-// Handles both semantic ({{|Name::::label|}}) and direct ({{[::flags:label]}}) forms.
-// The label is the last colon-separated field; content between tag and reset is the URL.
-var inlineSemLabelRegex = regexp.MustCompile(`\{\{\|[^|]*::::[^|]+\|\}\}[^{]*\{\{(?:\[-\]|)\}\}`)
-var inlineDirLabelRegex = regexp.MustCompile(`\{\{\[[^\]]*:::[^:]*:[^\]]+\]\}\}[^{]*\{\{(?:\[-\]|)\}\}`)
-
 // ToPlain removes all semantic tags, direct tags, and ANSI escape sequences, returning
-// plain undecorated text. Inline hyperlink tags (with a label field) are replaced with
-// their display label rather than the URL content.
+// plain undecorated text. Inline hyperlink tags (with a URL field) keep their content
+// (the display text) rather than being stripped along with the tag.
 func (st *Styler) ToPlain(s string) string {
-	// Replace inline hyperlink blocks with just the display label.
-	s = inlineSemLabelRegex.ReplaceAllStringFunc(s, func(m string) string {
-		// Extract label from {{|Name::::label|}} — everything after last "::::"
-		end := strings.Index(m, "|}}")
-		if end < 0 {
-			return m
-		}
-		tag := m[:end]
-		if idx := strings.LastIndex(tag, "::::"); idx >= 0 {
-			return tag[idx+4:]
-		}
-		return m
-	})
 	s = st.semanticRegex.ReplaceAllString(s, "")
 	s = st.directRegex.ReplaceAllString(s, "")
 	return StripANSI(s)
 }
 
-// processInlineHyperlinks handles tags with an explicit display-text (label) field:
+// processInlineHyperlinks handles tags with an explicit URL field:
 //
-//	Direct:   {{[fg:bg:flags:Display Label]}}https://url{{[-]}}
-//	Semantic: {{|StyleName:fg:bg:flags:Display Label|}}https://url{{[-]}}
+//	Direct:   {{[fg:bg:flags:https://url]}}Display Text{{[-]}}
+//	Semantic: {{|StyleName:fg:bg:flags:https://url|}}Display Text{{[-]}}
 //
-// The label is the visible link text; content up to the next reset tag is the URL.
-// Empty label uses the URL as both link and display text.
-// Tags without a label field are left untouched for later processing.
+// The field holds the link destination; content up to the next reset tag is the visible
+// display text. An empty URL field uses the content as both destination and display text
+// (matching RegisterHyperlinkTag's behavior). Tags without this field are left untouched
+// for later processing.
 func (st *Styler) processInlineHyperlinks(text string) string {
 	dirContentIdx := st.directRegex.SubexpIndex("content")
 	dirLabelIdx := st.directRegex.SubexpIndex("label")
@@ -353,30 +335,30 @@ func (st *Styler) processInlineHyperlinks(text string) string {
 		useDir := dirLoc != nil && (semLoc == nil || dirLoc[0] <= semLoc[0])
 
 		var tagStart, tagEnd int
-		var label, styleCode string
+		var url, styleCode string
 		var isSemantic bool
 
 		if useDir {
 			tagStart, tagEnd = dirLoc[0], dirLoc[1]
-			// Direct tag: label is a named regex group.
+			// Direct tag: URL is a named regex group.
 			if dirLoc[dirLabelIdx*2] < 0 {
 				out.WriteString(slice[:tagEnd])
 				consumed += tagEnd
 				continue
 			}
-			label = slice[dirLoc[dirLabelIdx*2]:dirLoc[dirLabelIdx*2+1]]
+			url = slice[dirLoc[dirLabelIdx*2]:dirLoc[dirLabelIdx*2+1]]
 			styleCode = slice[dirLoc[dirContentIdx*2]:dirLoc[dirContentIdx*2+1]]
 		} else {
 			tagStart, tagEnd = semLoc[0], semLoc[1]
-			// Semantic tag: label is the 5th colon-field, extracted in code.
+			// Semantic tag: URL is the 5th colon-field, extracted in code.
 			fullContent := slice[semLoc[semContentIdx*2]:semLoc[semContentIdx*2+1]]
-			semLabel, hasLabel := semLabelFrom(fullContent)
-			if !hasLabel {
+			semURL, hasURL := semLabelFrom(fullContent)
+			if !hasURL {
 				out.WriteString(slice[:tagEnd])
 				consumed += tagEnd
 				continue
 			}
-			label = semLabel
+			url = semURL
 			styleCode = stripSemanticLabel(fullContent)
 			isSemantic = true
 		}
@@ -388,9 +370,9 @@ func (st *Styler) processInlineHyperlinks(text string) string {
 			continue
 		}
 
-		url := slice[tagEnd : tagEnd+resetLoc[0]]
-		if label == "" {
-			label = st.ToPlain(url)
+		label := slice[tagEnd : tagEnd+resetLoc[0]]
+		if url == "" {
+			url = st.ToPlain(label)
 		}
 
 		var styleANSI string

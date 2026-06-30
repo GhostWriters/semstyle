@@ -222,26 +222,26 @@ theme changes.
 
 ### Inline explicit hyperlinks
 
-Add a label as the final colon-field of any tag. The enclosed content is the URL; the label
-is the visible text. An empty label uses the URL as both:
+Add a URL as the final colon-field of any tag. The enclosed content is the visible display
+text; the field is the link destination. An empty field uses the content as both:
 
-**Direct tag** — label is the 4th field (`fg:bg:flags:label`):
+**Direct tag** — URL is the 4th field (`fg:bg:flags:url`):
 
 ```text
-{{[cyan::U:DockSTARTer Website]}}https://dockstarter.com{{[-]}}
-{{[cyan::U:]}}https://dockstarter.com{{[-]}}   ← empty label: URL shown as text
+{{[cyan::U:https://dockstarter.com]}}DockSTARTer Website{{[-]}}
+{{[cyan::U:]}}https://dockstarter.com{{[-]}}   ← empty field: content shown as both URL and text
 ```
 
-**Semantic tag** — label is the 5th field (`name:fg:bg:flags:label`); use empty fields to
+**Semantic tag** — URL is the 5th field (`name:fg:bg:flags:url`); use empty fields to
 keep the registered style with no color overrides:
 
 ```text
-{{|mylink:red:black:B:DockSTARTer Website|}}https://dockstarter.com{{[-]}}
-{{|mylink::::DockSTARTer Website|}}https://dockstarter.com{{[-]}}   ← no overrides
+{{|mylink:red:black:B:https://dockstarter.com|}}DockSTARTer Website{{[-]}}
+{{|mylink::::https://dockstarter.com|}}DockSTARTer Website{{[-]}}   ← no overrides
 ```
 
 Both forms work whether or not the tag is also registered as a hyperlink tag — the explicit
-label always takes precedence for the display text.
+URL field always takes precedence as the link destination.
 
 ## Render policy
 
