@@ -362,3 +362,72 @@ func TestConsoleTagNoAmbiguityWithModifierSyntax(t *testing.T) {
 		t.Errorf("GetRawTagCode(X) = %q, want %q (a plain string candidate, even one that looks like \"console:Title\", should be treated as a literal tag name, not the ConsoleTag marker)", got, want)
 	}
 }
+
+// TestFallbackChainReachesCandidatesOwnConsoleTier verifies that when a
+// fallback chain (followChains=true) lands on a candidate name that has NO
+// theme value and NO fallback rule of its own, that candidate's own
+// automatic console-tier check still applies -- the full theme->rule->
+// console priority is recursive, not just applied once at the top.
+func TestFallbackChainReachesCandidatesOwnConsoleTier(t *testing.T) {
+	st := New()
+	// "Title": no theme value, no rule, but a console value.
+	st.RegisterConsoleTagRaw("title", "cyan:-:U")
+	// "TitleWarn": no theme value, chains to "Title".
+	st.RegisterFallback("TitleWarn", true, "Title")
+
+	got := st.GetRawTagCode("TitleWarn")
+	want := "cyan:-:U"
+	if got != want {
+		t.Errorf("GetRawTagCode(TitleWarn) = %q, want %q (should reach Title's own console value)", got, want)
+	}
+}
+
+// TestFallbackChainCandidateOwnRuleWinsOverItsConsoleValue verifies that if
+// the candidate landed on ("Title") has BOTH its own registered rule AND a
+// console value, the rule takes priority for Title too -- same
+// rule-before-console ordering applies at every level of the chain.
+func TestFallbackChainCandidateOwnRuleWinsOverItsConsoleValue(t *testing.T) {
+	st := New()
+	st.RegisterThemeTagRaw("base", "yellow:-:B")
+	st.RegisterConsoleTagRaw("title", "cyan:-:U") // Title's console value
+	st.RegisterFallback("Title", true, "Base")     // but Title has its OWN rule -> Base
+	st.RegisterFallback("TitleWarn", true, "Title")
+
+	got := st.GetRawTagCode("TitleWarn")
+	want := "yellow:-:B" // Base's value, via Title's rule -- not Title's console value
+	if got != want {
+		t.Errorf("GetRawTagCode(TitleWarn) = %q, want %q (Title's own rule should win over Title's console value)", got, want)
+	}
+}
+
+// TestFollowChainsFalseStillGetsCandidatesConsoleValue verifies a
+// followChains=false candidate DOES still get its own direct theme/console
+// value (that's normal directLookup, unrelated to chaining) -- only the
+// candidate's own separately-registered RULE is skipped, not its plain
+// console value.
+func TestFollowChainsFalseStillGetsCandidatesConsoleValue(t *testing.T) {
+	st := New()
+	st.RegisterConsoleTagRaw("title", "cyan:-:U")
+	st.RegisterFallback("TitleWarn", false, "Title")
+
+	got := st.GetRawTagCode("TitleWarn")
+	want := "cyan:-:U"
+	if got != want {
+		t.Errorf("GetRawTagCode(TitleWarn) = %q, want %q", got, want)
+	}
+}
+
+// TestFollowChainsFalseSkipsCandidatesOwnRule verifies a followChains=false
+// candidate's own separately-registered rule is NOT consulted -- only its
+// direct value counts, confirming the "self-contained, no chasing" promise.
+func TestFollowChainsFalseSkipsCandidatesOwnRule(t *testing.T) {
+	st := New()
+	st.RegisterThemeTagRaw("base", "yellow:-:B")
+	st.RegisterFallback("Title", true, "Base") // Title has its own rule, no direct value
+	st.RegisterFallback("TitleWarn", false, "Title")
+
+	got := st.GetRawTagCode("TitleWarn")
+	if got != "" {
+		t.Errorf("GetRawTagCode(TitleWarn) = %q, want empty (Title's own rule should NOT be chased under followChains=false)", got)
+	}
+}
