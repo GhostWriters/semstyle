@@ -151,12 +151,13 @@ companion package, which parses theme files into a map).
 
 ### Tag fallbacks
 
-`RegisterFallback(name, fallback)` declares that, when `name` isn't registered in either
-map, resolution should use `fallback`'s value instead of resolving to nothing:
+`RegisterFallback(name, followChains, candidates...)` declares one or more fallback
+candidates for `name`: when `name` isn't registered in either map, resolution tries each
+candidate in order and uses the first that resolves.
 
 ```go
 semstyle.RegisterConsoleTag("Title", "{{[black::U]}}")
-semstyle.RegisterFallback("TitleWarn", "Title")
+semstyle.RegisterFallback("TitleWarn", true, "Title")
 
 semstyle.ToANSI("{{|TitleWarn|}}text{{[-]}}") // renders using Title's style
 ```
@@ -164,12 +165,29 @@ semstyle.ToANSI("{{|TitleWarn|}}text{{[-]}}") // renders using Title's style
 This applies everywhere a tag name is resolved — `ToANSI`/`ToTags` (inline `{{|name|}}`
 text), `GetRawTagCode`, and `GetColorDefinition` — not just one call site, so a caller
 that references `TitleWarn` by name in a dozen different places gets the fallback for
-free without threading resolution logic through each of them.
+free without threading resolution logic through each of them. A tag's own value always
+wins over its fallback when both are registered.
 
-A fallback can itself have a fallback; chains are followed up to 8 hops (with a cycle
-guard) so `A → B → C` resolves correctly even if only `C` is actually defined. A tag's own
-value always wins over its fallback when both are registered — `RegisterFallback` only
-supplies what to do when the tag is otherwise unresolved.
+`followChains` controls whether a candidate that isn't itself directly registered also
+follows its own separate `RegisterFallback` rule in turn:
+
+- `true` (the common case) — a candidate is resolved the same way `GetRawTagCode` would,
+  following its own rule too. With a single candidate this is a plain chain —
+  `A → B → C` resolves correctly (up to 8 hops, with a cycle guard) even if only `C` is
+  actually defined.
+- `false` — only a candidate's own direct theme/console value counts. A candidate used
+  this way doesn't inherit whatever fallback it might separately have when resolved on
+  its own elsewhere — useful for an ordered list of candidates that should stay
+  self-contained to `name`:
+
+  ```go
+  semstyle.RegisterThemeTag("Accent", "{{[cyan::B]}}")
+  semstyle.RegisterFallback("Highlight", false, "Emphasis", "Accent")
+  // "Emphasis" undefined -> falls through to "Accent"'s own style, ignoring
+  // whatever fallback "Emphasis" might separately have when used elsewhere
+  ```
+
+Registering again for the same `name` replaces its previous rule entirely.
 
 Fallback rules are typically a structural relationship in the caller's own tag-naming
 scheme (e.g. "a `Radio` tag falls back to its `Checkbox` equivalent") rather than
@@ -190,7 +208,7 @@ load/switch. Call `ClearFallbacks()` explicitly if a caller does want to reset t
 | `Sprintf(fmt, a...)` | Format string then apply `ToANSI` |
 | `RegisterConsoleTag(name, val)` / `…Raw` | Define a base semantic tag |
 | `RegisterThemeTag(name, val)` / `…Raw` | Define a theme semantic tag |
-| `RegisterFallback(name, fallback)` | Resolve `name` as `fallback` when `name` itself is unregistered |
+| `RegisterFallback(name, followChains, candidates...)` | Resolve `name` as the first resolvable candidate when `name` itself is unregistered |
 | `ClearFallbacks()` | Remove all registered fallback rules |
 | `SetThemeMap(m)` | Replace the theme map wholesale |
 | `SetRenderPolicy(fn)` | Gate rendering (return false → `ToPlain` instead of color) |

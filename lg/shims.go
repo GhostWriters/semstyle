@@ -137,14 +137,16 @@ func RegisterSemanticTagRaw(name, rawValue string) { semstyle.RegisterSemanticTa
 func RegisterHyperlinkTag(name string)             { semstyle.RegisterHyperlinkTag(name) }
 func RegisterColor(name, value string)             { semstyle.RegisterColor(name, value) }
 func GetRawTagCode(name string) string             { return semstyle.GetRawTagCode(name) }
-func RegisterFallback(name, fallback string)       { semstyle.RegisterFallback(name, fallback) }
-func ClearFallbacks()                              { semstyle.ClearFallbacks() }
-func GetColorDefinition(name string) string        { return semstyle.GetColorDefinition(name) }
-func UnregisterColor(name string)                  { semstyle.UnregisterColor(name) }
-func UnregisterPrefix(prefix string)               { semstyle.UnregisterPrefix(prefix) }
-func ClearThemeMap()                               { semstyle.ClearThemeMap() }
-func ResetCustomColors()                           { semstyle.ResetCustomColors() }
-func BuildColorMap()                               { semstyle.BuildColorMap() }
+func RegisterFallback(name string, followChains bool, candidates ...string) {
+	semstyle.RegisterFallback(name, followChains, candidates...)
+}
+func ClearFallbacks()                       { semstyle.ClearFallbacks() }
+func GetColorDefinition(name string) string { return semstyle.GetColorDefinition(name) }
+func UnregisterColor(name string)           { semstyle.UnregisterColor(name) }
+func UnregisterPrefix(prefix string)        { semstyle.UnregisterPrefix(prefix) }
+func ClearThemeMap()                        { semstyle.ClearThemeMap() }
+func ResetCustomColors()                    { semstyle.ResetCustomColors() }
+func BuildColorMap()                        { semstyle.BuildColorMap() }
 
 // -- Color utilities --
 

@@ -26,14 +26,23 @@
 // prefix resolves against the console map; with a prefix it resolves
 // theme-first with console fallback.
 //
-// [Styler.RegisterFallback] declares that an unregistered tag should resolve
-// as another tag instead of resolving to nothing. It applies everywhere a
-// tag name is resolved -- ToANSI/ToTags, GetRawTagCode, GetColorDefinition
-// -- and chains follow up to 8 hops:
+// [Styler.RegisterFallback] declares one or more fallback candidates for an
+// unregistered tag instead of it resolving to nothing. It applies
+// everywhere a tag name is resolved -- ToANSI/ToTags, GetRawTagCode,
+// GetColorDefinition:
 //
 //	semstyle.RegisterConsoleTag("Title", "{{[black::U]}}")
-//	semstyle.RegisterFallback("TitleWarn", "Title")
+//	semstyle.RegisterFallback("TitleWarn", true, "Title")
 //	semstyle.ToANSI("{{|TitleWarn|}}text{{[-]}}") // renders using Title's style
+//
+// followChains controls whether a candidate that isn't itself directly
+// registered also follows its own separate RegisterFallback rule in turn:
+// true (the common case) resolves it the same way GetRawTagCode would,
+// chaining up to 8 hops (with a cycle guard); false only counts a
+// candidate's direct value, useful for an ordered list of candidates that
+// should stay self-contained rather than reaching into each candidate's
+// independent wiring. Registering again for the same name replaces its
+// previous rule entirely.
 //
 // Fallback rules are a structural relationship (e.g. "Radio falls back to
 // Checkbox"), not per-theme data, so [Styler.ClearThemeMap] leaves them

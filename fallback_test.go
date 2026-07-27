@@ -9,7 +9,7 @@ import (
 func TestRegisterFallbackGetRawTagCode(t *testing.T) {
 	st := New()
 	st.RegisterThemeTagRaw("Title", "black:-:U")
-	st.RegisterFallback("TitleWarn", "Title")
+	st.RegisterFallback("TitleWarn", true, "Title")
 
 	got := st.GetRawTagCode("TitleWarn")
 	want := "black:-:U"
@@ -24,7 +24,7 @@ func TestRegisterFallbackDoesNotOverrideDefined(t *testing.T) {
 	st := New()
 	st.RegisterThemeTagRaw("Title", "black:-:U")
 	st.RegisterThemeTagRaw("TitleWarn", "yellow:-:U")
-	st.RegisterFallback("TitleWarn", "Title")
+	st.RegisterFallback("TitleWarn", true, "Title")
 
 	got := st.GetRawTagCode("TitleWarn")
 	want := "yellow:-:U"
@@ -38,8 +38,8 @@ func TestRegisterFallbackDoesNotOverrideDefined(t *testing.T) {
 func TestRegisterFallbackChain(t *testing.T) {
 	st := New()
 	st.RegisterThemeTagRaw("Title", "black:-:U")
-	st.RegisterFallback("TitleFocused", "Title")
-	st.RegisterFallback("TitleSubMenuFocused", "TitleFocused")
+	st.RegisterFallback("TitleFocused", true, "Title")
+	st.RegisterFallback("TitleSubMenuFocused", true, "TitleFocused")
 
 	got := st.GetRawTagCode("TitleSubMenuFocused")
 	want := "black:-:U"
@@ -52,8 +52,8 @@ func TestRegisterFallbackChain(t *testing.T) {
 // unset rather than hanging.
 func TestRegisterFallbackCycleGuard(t *testing.T) {
 	st := New()
-	st.RegisterFallback("A", "B")
-	st.RegisterFallback("B", "A")
+	st.RegisterFallback("A", true, "B")
+	st.RegisterFallback("B", true, "A")
 
 	got := st.GetRawTagCode("A")
 	if got != "" {
@@ -67,7 +67,7 @@ func TestRegisterFallbackCycleGuard(t *testing.T) {
 func TestRegisterFallbackInlineTagExpansion(t *testing.T) {
 	st := New()
 	st.RegisterThemeTag("Title", "{{[black::U]}}")
-	st.RegisterFallback("TitleWarn", "Title")
+	st.RegisterFallback("TitleWarn", true, "Title")
 
 	got := st.ToTags("{{|TitleWarn|}}", "")
 	want := "{{[black::U]}}"
@@ -84,7 +84,7 @@ func TestRegisterFallbackInlineTagExpansion(t *testing.T) {
 func TestClearThemeMapPreservesFallbacks(t *testing.T) {
 	st := New()
 	st.RegisterThemeTagRaw("Title", "black:-:U")
-	st.RegisterFallback("TitleWarn", "Title")
+	st.RegisterFallback("TitleWarn", true, "Title")
 	st.ClearThemeMap()
 
 	if got := st.GetRawTagCode("TitleWarn"); got != "" {
@@ -104,7 +104,7 @@ func TestClearThemeMapPreservesFallbacks(t *testing.T) {
 func TestClearFallbacks(t *testing.T) {
 	st := New()
 	st.RegisterThemeTagRaw("Title", "black:-:U")
-	st.RegisterFallback("TitleWarn", "Title")
+	st.RegisterFallback("TitleWarn", true, "Title")
 	st.ClearFallbacks()
 
 	if got := st.GetRawTagCode("TitleWarn"); got != "" {
@@ -112,5 +112,73 @@ func TestClearFallbacks(t *testing.T) {
 	}
 	if got := st.GetRawTagCode("Title"); got != "black:-:U" {
 		t.Errorf("GetRawTagCode(Title) after ClearFallbacks = %q, want %q (theme map should be untouched)", got, "black:-:U")
+	}
+}
+
+// TestRegisterFallbackMultipleTriesInOrder verifies multiple candidates are
+// tried in order, using the first one that resolves.
+func TestRegisterFallbackMultipleTriesInOrder(t *testing.T) {
+	st := New()
+	st.RegisterThemeTagRaw("B", "yellow:-:U")
+	st.RegisterThemeTagRaw("C", "green:-:U")
+	st.RegisterFallback("X", false, "A", "B", "C")
+
+	got := st.GetRawTagCode("X")
+	want := "yellow:-:U" // A undefined, B is the first that resolves
+	if got != want {
+		t.Errorf("GetRawTagCode(X) = %q, want %q", got, want)
+	}
+}
+
+// TestRegisterFallbackNoChain verifies that with followChains=false, a
+// candidate's own separate fallback rule is NOT consulted -- only its
+// direct theme/console value counts.
+func TestRegisterFallbackNoChain(t *testing.T) {
+	st := New()
+	st.RegisterThemeTagRaw("Root", "cyan:-:U")
+	st.RegisterFallback("A", true, "Root") // A's own independent fallback, unrelated to X's list
+	st.RegisterFallback("X", false, "A", "B")
+
+	got := st.GetRawTagCode("X")
+	if got != "" {
+		t.Errorf("GetRawTagCode(X) = %q, want empty (A isn't directly defined; its own fallback shouldn't be consulted from X's list)", got)
+	}
+
+	// Confirm A does resolve on its own -- proves the fallback rule itself
+	// works, just isn't reached via X's list.
+	if got := st.GetRawTagCode("A"); got != "cyan:-:U" {
+		t.Errorf("GetRawTagCode(A) directly = %q, want %q", got, "cyan:-:U")
+	}
+}
+
+// TestRegisterFallbackMultipleFollowChains verifies that with
+// followChains=true and multiple candidates, a candidate's own fallback
+// rule IS consulted.
+func TestRegisterFallbackMultipleFollowChains(t *testing.T) {
+	st := New()
+	st.RegisterThemeTagRaw("Root", "cyan:-:U")
+	st.RegisterFallback("A", true, "Root")
+	st.RegisterFallback("X", true, "A", "B")
+
+	got := st.GetRawTagCode("X")
+	want := "cyan:-:U"
+	if got != want {
+		t.Errorf("GetRawTagCode(X) = %q, want %q (A isn't directly defined, but its own fallback to Root should be followed)", got, want)
+	}
+}
+
+// TestRegisterFallbackReplacesPreviousRule verifies registering again for
+// the same name replaces its previous rule entirely.
+func TestRegisterFallbackReplacesPreviousRule(t *testing.T) {
+	st := New()
+	st.RegisterThemeTagRaw("Old", "red:-:U")
+	st.RegisterThemeTagRaw("New", "blue:-:U")
+	st.RegisterFallback("X", true, "Old")
+	st.RegisterFallback("X", false, "New")
+
+	got := st.GetRawTagCode("X")
+	want := "blue:-:U"
+	if got != want {
+		t.Errorf("GetRawTagCode(X) = %q, want %q (second RegisterFallback call should have replaced the first)", got, want)
 	}
 }

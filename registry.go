@@ -133,17 +133,46 @@ func (st *Styler) RegisterThemeTagRaw(name, rawValue string) {
 // -- it just gives up and resolves to unset past this many hops.
 const maxFallbackDepth = 8
 
-// lookupRaw resolves name against styleMap (nil means themeMap) with
-// console-map fallback, the same three-tier lookup GetRawTagCode and
-// ExpandTagsWithMap have always done, then -- if still unresolved --
-// consults any RegisterFallback chain for name, re-running the same
-// three-tier lookup against each fallback name in turn. Callers must already
-// hold st.mu (read or write); this method takes no lock itself.
-func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string) (string, bool) {
+// directLookup resolves name against styleMap (nil means themeMap) with
+// console-map fallback -- the three-tier lookup GetRawTagCode and
+// ExpandTagsWithMap have always done, with no fallback-chain consultation.
+// Callers must already hold st.mu (read or write); this method takes no
+// lock itself.
+func (st *Styler) directLookup(styleMap map[string]string, prefix, name string) (string, bool) {
 	m := styleMap
 	if m == nil {
 		m = st.themeMap
 	}
+	if prefix != "" {
+		if raw, ok := m[prefix+name]; ok {
+			return raw, true
+		}
+	}
+	if raw, ok := m[name]; ok {
+		return raw, true
+	}
+	if raw, ok := st.consoleMap[name]; ok {
+		return raw, true
+	}
+	return "", false
+}
+
+// fallbackRule is one name's registered RegisterFallback rule: an ordered
+// list of candidates (a single-element list for the common one-fallback
+// case) plus whether each candidate follows its own separate rule in turn.
+type fallbackRule struct {
+	candidates   []string
+	followChains bool
+}
+
+// lookupRaw resolves name via directLookup, then -- if still unresolved --
+// consults name's registered fallback rule (RegisterFallback) if any. A
+// single-candidate, chain-following rule is walked in this same loop (so
+// cycle detection covers the whole chain, e.g. A -> B -> C); a multi-
+// candidate list, or a rule with followChains=false, is resolved
+// per-candidate instead (see the loop body for why). Callers must already
+// hold st.mu (read or write); this method takes no lock itself.
+func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string) (string, bool) {
 	seen := make(map[string]bool, maxFallbackDepth)
 	for range maxFallbackDepth {
 		if seen[name] {
@@ -151,53 +180,83 @@ func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string) (st
 		}
 		seen[name] = true
 
-		var raw string
-		var ok bool
-		if prefix != "" {
-			raw, ok = m[prefix+name]
-		}
-		if !ok {
-			raw, ok = m[name]
-		}
-		if !ok {
-			raw, ok = st.consoleMap[name]
-		}
-		if ok {
+		if raw, ok := st.directLookup(styleMap, prefix, name); ok {
 			return raw, true
 		}
 
-		fb, hasFallback := st.fallbackMap[name]
-		if !hasFallback {
+		rule, hasRule := st.fallbackMap[name]
+		if !hasRule {
 			return "", false
 		}
-		name = fb
+
+		if len(rule.candidates) == 1 && rule.followChains {
+			// The common single-fallback-that-chains case: continue this
+			// same loop (not a recursive call) so seen/maxFallbackDepth
+			// cover the whole chain in one place, exactly as a multi-hop
+			// A -> B -> C chain needs.
+			name = rule.candidates[0]
+			continue
+		}
+		for _, candidate := range rule.candidates {
+			if rule.followChains {
+				if raw, ok := st.lookupRaw(styleMap, prefix, candidate); ok {
+					return raw, true
+				}
+				continue
+			}
+			if raw, ok := st.directLookup(styleMap, prefix, candidate); ok {
+				return raw, true
+			}
+		}
+		return "", false
 	}
 	return "", false
 }
 
-// RegisterFallback declares that, when name isn't registered in the theme or
-// console map, tag resolution should use fallback's value instead of
-// resolving to nothing. Applies everywhere a tag name is resolved --
-// GetRawTagCode, GetColorDefinition, and inline "{{|name|}}" text expansion
-// -- not just one call site, so a caller need not re-derive the fallback at
-// each place it references the tag. fallback may itself have its own
-// RegisterFallback entry; chains are followed up to maxFallbackDepth hops.
-func (st *Styler) RegisterFallback(name, fallback string) {
+// RegisterFallback declares one or more fallback candidates for name: when
+// name isn't registered in the theme or console map, tag resolution tries
+// each candidate in order and uses the first that resolves. Applies
+// everywhere a tag name is resolved -- GetRawTagCode, GetColorDefinition,
+// and inline "{{|name|}}" text expansion -- not just one call site, so a
+// caller need not re-derive the fallback at each place it references the
+// tag.
+//
+// followChains controls whether a candidate that isn't itself directly
+// registered also follows its own separate RegisterFallback rule in turn:
+//
+//   - true (the common case, e.g. a single fallback that may itself have a
+//     fallback): a candidate is resolved the same way GetRawTagCode would,
+//     following its own rule too. A single candidate with followChains=true
+//     is a plain single-fallback chain -- RegisterFallback("TitleWarn",
+//     true, "Title") -- and chains transitively (up to maxFallbackDepth
+//     hops, with a cycle guard) if "Title" itself has its own rule.
+//   - false: only a candidate's own direct theme/console value counts. A
+//     candidate used this way doesn't inherit whatever fallback it might
+//     separately have when resolved on its own elsewhere -- useful for an
+//     ordered list of candidates that should stay self-contained to name
+//     rather than reaching into each candidate's independent wiring.
+//
+// Registering again for the same name replaces its previous rule entirely.
+func (st *Styler) RegisterFallback(name string, followChains bool, candidates ...string) {
 	st.ensureMaps()
 	st.mu.Lock()
 	if st.fallbackMap == nil {
-		st.fallbackMap = make(map[string]string)
+		st.fallbackMap = make(map[string]fallbackRule)
 	}
-	st.fallbackMap[strings.ToLower(name)] = strings.ToLower(fallback)
+	lowered := make([]string, len(candidates))
+	for i, c := range candidates {
+		lowered[i] = strings.ToLower(c)
+	}
+	st.fallbackMap[strings.ToLower(name)] = fallbackRule{candidates: lowered, followChains: followChains}
 	st.mu.Unlock()
 }
 
-// ClearFallbacks removes all registered fallback rules. Also called by
-// ClearThemeMap, since fallback rules (like the theme map itself) are
-// typically re-registered fresh on every theme load.
+// ClearFallbacks removes all registered fallback rules. Unlike
+// ClearThemeMap, callers must call this explicitly -- see ClearThemeMap's
+// doc comment for why fallback rules aren't cleared automatically.
 func (st *Styler) ClearFallbacks() {
 	st.mu.Lock()
-	st.fallbackMap = make(map[string]string)
+	st.fallbackMap = make(map[string]fallbackRule)
 	st.mu.Unlock()
 }
 
@@ -275,7 +334,7 @@ func (st *Styler) UnregisterPrefix(prefix string) {
 }
 
 // ClearThemeMap removes all entries from the theme map. Fallback rules
-// (RegisterFallback) are left untouched -- unlike theme tag values, a
+// (RegisterFallback, RegisterFallbackList) are left untouched -- unlike theme tag values, a
 // fallback rule is typically a structural relationship in the caller's own
 // tag-naming scheme (e.g. "a Radio tag falls back to its Checkbox
 // equivalent") that holds regardless of which theme is loaded, so callers
@@ -343,8 +402,8 @@ func GetRawTagCode(name string) string {
 	return Default.GetRawTagCode(name)
 }
 
-func RegisterFallback(name, fallback string) {
-	Default.RegisterFallback(name, fallback)
+func RegisterFallback(name string, followChains bool, candidates ...string) {
+	Default.RegisterFallback(name, followChains, candidates...)
 }
 
 func ClearFallbacks() {

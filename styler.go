@@ -17,12 +17,13 @@ type Styler struct {
 	consoleMap map[string]string
 	// themeMap: theme-loaded semantic tag -> raw style code (takes precedence over console).
 	themeMap map[string]string
-	// fallbackMap: tag name -> another tag name to consult when the first isn't
-	// registered in either map. Populated via RegisterFallback; consulted by every
+	// fallbackMap: tag name -> its registered fallback rule (one or more
+	// candidate tag names to consult when the first isn't registered in
+	// either map). Populated via RegisterFallback; consulted by every
 	// tag-resolution path (GetRawTagCode, GetColorDefinition, and inline
-	// "{{|name|}}" text expansion) so a fallback rule applies uniformly wherever
-	// a tag can appear, not just one call site.
-	fallbackMap map[string]string
+	// "{{|name|}}" text expansion) so a fallback rule applies uniformly
+	// wherever a tag can appear, not just one call site.
+	fallbackMap map[string]fallbackRule
 	// ansiMap: color/modifier names -> ANSI code.
 	ansiMap map[string]string
 	// attributeMap: non-color attribute names -> ANSI code.
@@ -53,7 +54,7 @@ func New() *Styler {
 	s := &Styler{
 		consoleMap:   make(map[string]string),
 		themeMap:     make(map[string]string),
-		fallbackMap:  make(map[string]string),
+		fallbackMap:  make(map[string]fallbackRule),
 		ansiMap:      make(map[string]string),
 		attributeMap: make(map[string]string),
 		semPre:       SemanticPrefix,
