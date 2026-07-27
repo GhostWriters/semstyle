@@ -4,6 +4,30 @@ import (
 	"testing"
 )
 
+// TestRegisterFallbackBeatsAutoConsoleFallback verifies an explicit
+// RegisterFallback rule for a name takes priority over the automatic
+// console-map tier (left at its default, enabled) when that name also
+// happens to exist in the console map -- the exact scenario that used to
+// silently shadow the rule before lookup order was fixed to check the rule
+// before the automatic tier.
+func TestRegisterFallbackBeatsAutoConsoleFallback(t *testing.T) {
+	st := New()
+	if !st.AutoConsoleFallback() {
+		t.Fatal("expected AutoConsoleFallback to default to true")
+	}
+	st.RegisterThemeTagRaw("Highlight", "yellow:-:B")
+	// Deliberately register a console-map entry under the SAME name the
+	// fallback rule targets, with a different, distinguishable value.
+	st.RegisterConsoleTagRaw("applicationname", "cyan:-:-")
+	st.RegisterFallback("ApplicationName", true, "Highlight")
+
+	got := st.GetRawTagCode("ApplicationName")
+	want := "yellow:-:B" // Highlight's value, NOT the console entry's "cyan:-:-"
+	if got != want {
+		t.Errorf("GetRawTagCode(ApplicationName) = %q, want %q (explicit rule should win over the console entry)", got, want)
+	}
+}
+
 // TestRegisterFallbackGetRawTagCode verifies GetRawTagCode consults a
 // registered fallback when the tag itself isn't defined.
 func TestRegisterFallbackGetRawTagCode(t *testing.T) {

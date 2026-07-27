@@ -133,15 +133,10 @@ func (st *Styler) RegisterThemeTagRaw(name, rawValue string) {
 // -- it just gives up and resolves to unset past this many hops.
 const maxFallbackDepth = 8
 
-// directLookup resolves name against styleMap (nil means themeMap) with
-// console-map fallback -- the three-tier lookup GetRawTagCode and
-// ExpandTagsWithMap have always done, with no fallback-chain consultation.
-// The console-map tier is skipped when disableAutoConsoleFallback is set
-// (see SetAutoConsoleFallback); an explicit "console:name" fallback
-// candidate (consoleOnlyLookup) is unaffected either way, since that's an
-// intentional per-tag opt-in rather than this automatic tier. Callers must
-// already hold st.mu (read or write); this method takes no lock itself.
-func (st *Styler) directLookup(styleMap map[string]string, prefix, name string) (string, bool) {
+// themeOnlyLookup resolves name against styleMap (nil means themeMap),
+// with no console-map consultation at all. Callers must already hold
+// st.mu (read or write); this method takes no lock itself.
+func (st *Styler) themeOnlyLookup(styleMap map[string]string, prefix, name string) (string, bool) {
 	m := styleMap
 	if m == nil {
 		m = st.themeMap
@@ -152,6 +147,22 @@ func (st *Styler) directLookup(styleMap map[string]string, prefix, name string) 
 		}
 	}
 	if raw, ok := m[name]; ok {
+		return raw, true
+	}
+	return "", false
+}
+
+// directLookup resolves name via themeOnlyLookup, then -- if still
+// unresolved -- the console map, unless disableAutoConsoleFallback is set
+// (see SetAutoConsoleFallback). This is the three-tier lookup GetRawTagCode
+// and ExpandTagsWithMap have always done for the primary name being
+// resolved, and is also used to resolve an individual followChains=false
+// fallback candidate. An explicit ConsoleTag candidate (consoleOnlyLookup)
+// is unaffected by the toggle either way, since that's an intentional
+// per-tag opt-in rather than this automatic tier. Callers must already
+// hold st.mu (read or write); this method takes no lock itself.
+func (st *Styler) directLookup(styleMap map[string]string, prefix, name string) (string, bool) {
+	if raw, ok := st.themeOnlyLookup(styleMap, prefix, name); ok {
 		return raw, true
 	}
 	if !st.disableAutoConsoleFallback {
@@ -222,14 +233,20 @@ type fallbackRule struct {
 	followChains bool
 }
 
-// lookupRaw resolves name via directLookup, then -- if still unresolved --
-// consults name's registered fallback rule (RegisterFallback) if any. A
-// single non-literal candidate with followChains=true is walked in this
-// same loop (so cycle detection covers the whole chain, e.g. A -> B -> C);
-// anything else (a literal candidate, multiple candidates, or
-// followChains=false) is resolved per-candidate instead (see the loop body
-// for why). Callers must already hold st.mu (read or write); this method
-// takes no lock itself.
+// lookupRaw resolves name via themeOnlyLookup, then -- if still unresolved
+// -- consults name's registered fallback rule (RegisterFallback) if any,
+// checked BEFORE the automatic console-map tier: an explicit rule for name
+// is a more specific, intentional statement than the blanket "any tag can
+// silently pick up a same-named console default" tier, so it takes
+// priority. Only once name has neither a theme value nor a registered rule
+// does resolution fall through to the automatic console tier (unless
+// disabled via SetAutoConsoleFallback) as the true last resort. A single
+// non-literal candidate with followChains=true is walked in this same loop
+// (so cycle detection covers the whole chain, e.g. A -> B -> C); anything
+// else (a literal candidate, multiple candidates, or followChains=false)
+// is resolved per-candidate instead (see the loop body for why). Callers
+// must already hold st.mu (read or write); this method takes no lock
+// itself.
 func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string) (string, bool) {
 	seen := make(map[string]bool, maxFallbackDepth)
 	for range maxFallbackDepth {
@@ -238,12 +255,17 @@ func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string) (st
 		}
 		seen[name] = true
 
-		if raw, ok := st.directLookup(styleMap, prefix, name); ok {
+		if raw, ok := st.themeOnlyLookup(styleMap, prefix, name); ok {
 			return raw, true
 		}
 
 		rule, hasRule := st.fallbackMap[name]
 		if !hasRule {
+			if !st.disableAutoConsoleFallback {
+				if raw, ok := st.consoleMap[name]; ok {
+					return raw, true
+				}
+			}
 			return "", false
 		}
 
