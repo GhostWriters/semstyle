@@ -189,6 +189,15 @@ follows its own separate `RegisterFallback` rule in turn:
 
 Registering again for the same `name` replaces its previous rule entirely.
 
+Fallback rules also apply when a *theme file itself* references a tag by name (e.g. one
+style's value is `{{|OtherTag|}}`) and that tag has no definition of its own in the file
+-- the `semtheme` companion package consults `ResolveFallbackViaLookup` against the
+theme's own raw values before giving up, so an inline reference to a fallback-registered-
+but-undefined tag resolves the same way a direct lookup of that tag would at runtime.
+Register fallback rules before parsing any theme file that might rely on this (a
+`sync.Once`-guarded registration function that runs before the first theme load works
+well).
+
 Fallback rules are typically a structural relationship in the caller's own tag-naming
 scheme (e.g. "a `Radio` tag falls back to its `Checkbox` equivalent") rather than
 per-theme data, so `ClearThemeMap` deliberately leaves them untouched — register them
@@ -239,6 +248,7 @@ bare string that way.
 | `SetAutoConsoleFallback(enabled)` | Enable/disable the automatic theme→console fallback tier (on by default) |
 | `ConsoleTag(name)` | `RegisterFallback` candidate meaning "console map only," for opting a tag back in |
 | `ClearFallbacks()` | Remove all registered fallback rules |
+| `ResolveFallbackViaLookup(name, lookup)` | Resolve `name`'s registered fallback rule against a caller-supplied `lookup` instead of this Styler's own maps — for a theme-file parser resolving inline tag references against its own raw values |
 | `SetThemeMap(m)` | Replace the theme map wholesale |
 | `SetRenderPolicy(fn)` | Gate rendering (return false → `ToPlain` instead of color) |
 | `New()` | Create an independent `*Styler` |

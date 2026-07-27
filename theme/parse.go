@@ -181,6 +181,47 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 				continue
 			}
 
+			// targetKey has no definition of its own in this theme (e.g. it was
+			// deliberately omitted in favor of a registered RegisterFallback rule).
+			// Honor that rule against this theme's own rawValues before falling
+			// through to the console map, so a reference to an omitted-but-
+			// fallback-registered tag resolves the same way a direct lookup of
+			// that tag would.
+			if raw, ok := semstyle.ResolveFallbackViaLookup(targetKey, func(cand string) (string, bool) {
+				// cand is lowercased (fallback candidates are stored
+				// lowercase); rawValues keys are theme-authored case
+				// (typically PascalCase), so match case-insensitively.
+				var key string
+				var v string
+				var exists bool
+				for k, val := range rawValues {
+					if strings.EqualFold(k, cand) {
+						key, v, exists = k, val, true
+						break
+					}
+				}
+				if !exists {
+					return "", false
+				}
+				if visiting[key] {
+					return "", false
+				}
+				visiting[key] = true
+				resolvedCand, err := resolveThemeValue(v, rawValues, visiting, semPre, semSuf, dirPre, dirSuf)
+				delete(visiting, key)
+				if err != nil {
+					return "", false
+				}
+				return resolvedCand, true
+			}); ok {
+				mergeStyle(raw)
+				if modifiers != "" {
+					mergeStyle(modifiers)
+				}
+				cur = cur[end:]
+				continue
+			}
+
 			// Fallback to global semantic tags (e.g. Notice, Success). Re-wrap in the
 			// engine's standard delimiters so ExpandConsoleTags can resolve it regardless
 			// of the file-specific delimiters in use.

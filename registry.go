@@ -303,6 +303,72 @@ func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string) (st
 	return "", false
 }
 
+// ResolveFallbackViaLookup resolves name's registered fallback rule (if any)
+// using lookup for non-literal, non-console-only candidates instead of this
+// Styler's own theme map -- for a caller (e.g. a theme-file parser) that
+// needs to honor fallback rules while resolving a reference against its own
+// data (a theme's raw [styles] values) rather than an already-registered
+// Styler map. Literal candidates are returned as-is; console-tagged
+// candidates still resolve against this Styler's console map via
+// consoleOnlyLookup. lookup should return (rawValue, true) if it has its own
+// definition for the given candidate name, or ("", false) otherwise -- it is
+// not expected to itself chase fallback rules; ResolveFallbackViaLookup
+// handles that by recursing when a candidate has no lookup hit and the rule
+// (or the candidate's own rule) says to follow chains. Returns ("", false)
+// if name has no registered rule or nothing resolves.
+func ResolveFallbackViaLookup(name string, lookup func(string) (string, bool)) (string, bool) {
+	return Default.ResolveFallbackViaLookup(name, lookup)
+}
+
+// ResolveFallbackViaLookup is the Styler method behind the package-level
+// ResolveFallbackViaLookup func. See its doc comment for behavior.
+func (st *Styler) ResolveFallbackViaLookup(name string, lookup func(string) (string, bool)) (string, bool) {
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	return st.resolveFallbackViaLookup(strings.ToLower(name), lookup, make(map[string]bool, maxFallbackDepth))
+}
+
+func (st *Styler) resolveFallbackViaLookup(name string, lookup func(string) (string, bool), seen map[string]bool) (string, bool) {
+	if seen[name] {
+		return "", false // cycle guard
+	}
+	seen[name] = true
+
+	rule, hasRule := st.fallbackMap[name]
+	if !hasRule {
+		return "", false
+	}
+
+	if len(rule.candidates) == 1 && rule.followChains &&
+		!rule.candidates[0].literal && !rule.candidates[0].consoleOnly {
+		cand := rule.candidates[0].value
+		if raw, ok := lookup(cand); ok {
+			return raw, true
+		}
+		return st.resolveFallbackViaLookup(cand, lookup, seen)
+	}
+	for _, candidate := range rule.candidates {
+		if candidate.literal {
+			return candidate.value, true
+		}
+		if candidate.consoleOnly {
+			if raw, ok := st.consoleOnlyLookup(candidate.value); ok {
+				return raw, true
+			}
+			continue
+		}
+		if raw, ok := lookup(candidate.value); ok {
+			return raw, true
+		}
+		if rule.followChains {
+			if raw, ok := st.resolveFallbackViaLookup(candidate.value, lookup, seen); ok {
+				return raw, true
+			}
+		}
+	}
+	return "", false
+}
+
 // RegisterFallback declares one or more fallback candidates for name: when
 // name isn't registered in the theme or console map, tag resolution tries
 // each candidate in order and uses the first that resolves. Applies
