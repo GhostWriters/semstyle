@@ -26,6 +26,20 @@
 // prefix resolves against the console map; with a prefix it resolves
 // theme-first with console fallback.
 //
+// [Styler.RegisterFallback] declares that an unregistered tag should resolve
+// as another tag instead of resolving to nothing. It applies everywhere a
+// tag name is resolved -- ToANSI/ToTags, GetRawTagCode, GetColorDefinition
+// -- and chains follow up to 8 hops:
+//
+//	semstyle.RegisterConsoleTag("Title", "{{[black::U]}}")
+//	semstyle.RegisterFallback("TitleWarn", "Title")
+//	semstyle.ToANSI("{{|TitleWarn|}}text{{[-]}}") // renders using Title's style
+//
+// Fallback rules are a structural relationship (e.g. "Radio falls back to
+// Checkbox"), not per-theme data, so [Styler.ClearThemeMap] leaves them
+// untouched -- register once and they keep applying across every later
+// theme load/switch. Use [Styler.ClearFallbacks] to reset them explicitly.
+//
 // # Package-level vs per-instance
 //
 // A process-wide [Default] styler backs the package-level functions. Most

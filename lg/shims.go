@@ -22,10 +22,10 @@ var Default = semstyle.Default
 // -- Constants: reset --
 
 const (
-	CodeReset      = semstyle.CodeReset
-	CodeFGReset    = semstyle.CodeFGReset
-	CodeBGReset    = semstyle.CodeBGReset
-	CodeHardReset  = semstyle.CodeHardReset
+	CodeReset       = semstyle.CodeReset
+	CodeFGReset     = semstyle.CodeFGReset
+	CodeBGReset     = semstyle.CodeBGReset
+	CodeHardReset   = semstyle.CodeHardReset
 	CodeHardFGReset = semstyle.CodeHardFGReset
 	CodeHardBGReset = semstyle.CodeHardBGReset
 )
@@ -98,8 +98,8 @@ var (
 func init() {
 	SemanticPrefix = semstyle.SemanticPrefix
 	SemanticSuffix = semstyle.SemanticSuffix
-	DirectPrefix   = semstyle.DirectPrefix
-	DirectSuffix   = semstyle.DirectSuffix
+	DirectPrefix = semstyle.DirectPrefix
+	DirectSuffix = semstyle.DirectSuffix
 }
 
 // -- Render policy -- this is a function var; assign semstyle.RenderPolicy directly.
@@ -108,13 +108,13 @@ func SetRenderPolicy(fn func() bool) { semstyle.Default.SetRenderPolicy(fn) }
 
 // -- Core rendering --
 
-func ToANSI(s string, prefix ...string) string          { return semstyle.ToANSI(s, prefix...) }
-func ToTags(s string, prefix ...string) string          { return semstyle.ToTags(s, prefix...) }
-func ToPlain(s string) string                           { return semstyle.ToPlain(s) }
-func StripTags(s string) string                         { return semstyle.StripTags(s) }
-func StripANSI(s string) string                         { return semstyle.StripANSI(s) }
-func StripDelimiters(s string) string                   { return semstyle.StripDelimiters(s) }
-func Sprintf(format string, a ...any) string            { return semstyle.Sprintf(format, a...) }
+func ToANSI(s string, prefix ...string) string { return semstyle.ToANSI(s, prefix...) }
+func ToTags(s string, prefix ...string) string { return semstyle.ToTags(s, prefix...) }
+func ToPlain(s string) string                  { return semstyle.ToPlain(s) }
+func StripTags(s string) string                { return semstyle.StripTags(s) }
+func StripANSI(s string) string                { return semstyle.StripANSI(s) }
+func StripDelimiters(s string) string          { return semstyle.StripDelimiters(s) }
+func Sprintf(format string, a ...any) string   { return semstyle.Sprintf(format, a...) }
 func ExpandTagsWithMap(text string, styleMap map[string]string, stripUnresolvable bool, prefix string) string {
 	return semstyle.ExpandTagsWithMap(text, styleMap, stripUnresolvable, prefix)
 }
@@ -128,32 +128,34 @@ func WrapDirect(code string) string   { return semstyle.WrapDirect(code) }
 
 func New() *semstyle.Styler { return semstyle.New() }
 
-func RegisterConsoleTag(name, taggedValue string)    { semstyle.RegisterConsoleTag(name, taggedValue) }
-func RegisterConsoleTagRaw(name, rawValue string)    { semstyle.RegisterConsoleTagRaw(name, rawValue) }
-func RegisterThemeTag(name, taggedValue string)      { semstyle.RegisterThemeTag(name, taggedValue) }
-func RegisterThemeTagRaw(name, rawValue string)      { semstyle.RegisterThemeTagRaw(name, rawValue) }
-func RegisterSemanticTag(name, taggedValue string)   { semstyle.RegisterSemanticTag(name, taggedValue) }
-func RegisterSemanticTagRaw(name, rawValue string)   { semstyle.RegisterSemanticTagRaw(name, rawValue) }
-func RegisterHyperlinkTag(name string)               { semstyle.RegisterHyperlinkTag(name) }
-func RegisterColor(name, value string)               { semstyle.RegisterColor(name, value) }
-func GetRawTagCode(name string) string               { return semstyle.GetRawTagCode(name) }
-func GetColorDefinition(name string) string          { return semstyle.GetColorDefinition(name) }
-func UnregisterColor(name string)                    { semstyle.UnregisterColor(name) }
-func UnregisterPrefix(prefix string)                 { semstyle.UnregisterPrefix(prefix) }
-func ClearThemeMap()                                 { semstyle.ClearThemeMap() }
-func ResetCustomColors()                             { semstyle.ResetCustomColors() }
-func BuildColorMap()                                 { semstyle.BuildColorMap() }
+func RegisterConsoleTag(name, taggedValue string)  { semstyle.RegisterConsoleTag(name, taggedValue) }
+func RegisterConsoleTagRaw(name, rawValue string)  { semstyle.RegisterConsoleTagRaw(name, rawValue) }
+func RegisterThemeTag(name, taggedValue string)    { semstyle.RegisterThemeTag(name, taggedValue) }
+func RegisterThemeTagRaw(name, rawValue string)    { semstyle.RegisterThemeTagRaw(name, rawValue) }
+func RegisterSemanticTag(name, taggedValue string) { semstyle.RegisterSemanticTag(name, taggedValue) }
+func RegisterSemanticTagRaw(name, rawValue string) { semstyle.RegisterSemanticTagRaw(name, rawValue) }
+func RegisterHyperlinkTag(name string)             { semstyle.RegisterHyperlinkTag(name) }
+func RegisterColor(name, value string)             { semstyle.RegisterColor(name, value) }
+func GetRawTagCode(name string) string             { return semstyle.GetRawTagCode(name) }
+func RegisterFallback(name, fallback string)       { semstyle.RegisterFallback(name, fallback) }
+func ClearFallbacks()                              { semstyle.ClearFallbacks() }
+func GetColorDefinition(name string) string        { return semstyle.GetColorDefinition(name) }
+func UnregisterColor(name string)                  { semstyle.UnregisterColor(name) }
+func UnregisterPrefix(prefix string)               { semstyle.UnregisterPrefix(prefix) }
+func ClearThemeMap()                               { semstyle.ClearThemeMap() }
+func ResetCustomColors()                           { semstyle.ResetCustomColors() }
+func BuildColorMap()                               { semstyle.BuildColorMap() }
 
 // -- Color utilities --
 
-func ToColor(s string) color.Color    { return semstyle.ToColor(s) }
-func ToColorStr(c color.Color) string { return semstyle.ToColorStr(c) }
+func ToColor(s string) color.Color      { return semstyle.ToColor(s) }
+func ToColorStr(c color.Color) string   { return semstyle.ToColorStr(c) }
 func GetHexForColor(name string) string { return semstyle.GetHexForColor(name) }
 
 // -- Profile --
 
-func GetPreferredProfile() colorprofile.Profile      { return semstyle.GetPreferredProfile() }
-func SetPreferredProfile(p colorprofile.Profile)     { semstyle.SetPreferredProfile(p) }
+func GetPreferredProfile() colorprofile.Profile  { return semstyle.GetPreferredProfile() }
+func SetPreferredProfile(p colorprofile.Profile) { semstyle.SetPreferredProfile(p) }
 
 // -- Regex --
 
@@ -166,6 +168,6 @@ func SetDelimiters(semPre, semSuf, dirPre, dirSuf string) {
 	semstyle.SetDelimiters(semPre, semSuf, dirPre, dirSuf)
 	SemanticPrefix = semPre
 	SemanticSuffix = semSuf
-	DirectPrefix   = dirPre
-	DirectSuffix   = dirSuf
+	DirectPrefix = dirPre
+	DirectSuffix = dirSuf
 }

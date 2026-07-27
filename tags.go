@@ -167,30 +167,7 @@ func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, str
 			semanticName, modifiers, _ := strings.Cut(stripSemanticLabel(fullContent), ":")
 			content := strings.ToLower(semanticName)
 
-			var rawCode string
-			var ok bool
-
-			if styleMap != nil {
-				if prefix != "" {
-					rawCode, ok = styleMap[prefix+content]
-				}
-				if !ok {
-					rawCode, ok = styleMap[content]
-				}
-				if !ok {
-					rawCode, ok = st.consoleMap[content]
-				}
-			} else {
-				if prefix != "" {
-					rawCode, ok = st.themeMap[prefix+content]
-				}
-				if !ok {
-					rawCode, ok = st.themeMap[content]
-				}
-				if !ok {
-					rawCode, ok = st.consoleMap[content]
-				}
-			}
+			rawCode, ok := st.lookupRaw(styleMap, prefix, content)
 
 			if ok {
 				// If the stored value already contains delimiters it is a multi-tag

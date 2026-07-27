@@ -149,6 +149,34 @@ Each `Styler` keeps two semantic maps:
 theme-first with console fallback. Supply a theme map with `SetThemeMap` (or the `semtheme`
 companion package, which parses theme files into a map).
 
+### Tag fallbacks
+
+`RegisterFallback(name, fallback)` declares that, when `name` isn't registered in either
+map, resolution should use `fallback`'s value instead of resolving to nothing:
+
+```go
+semstyle.RegisterConsoleTag("Title", "{{[black::U]}}")
+semstyle.RegisterFallback("TitleWarn", "Title")
+
+semstyle.ToANSI("{{|TitleWarn|}}text{{[-]}}") // renders using Title's style
+```
+
+This applies everywhere a tag name is resolved — `ToANSI`/`ToTags` (inline `{{|name|}}`
+text), `GetRawTagCode`, and `GetColorDefinition` — not just one call site, so a caller
+that references `TitleWarn` by name in a dozen different places gets the fallback for
+free without threading resolution logic through each of them.
+
+A fallback can itself have a fallback; chains are followed up to 8 hops (with a cycle
+guard) so `A → B → C` resolves correctly even if only `C` is actually defined. A tag's own
+value always wins over its fallback when both are registered — `RegisterFallback` only
+supplies what to do when the tag is otherwise unresolved.
+
+Fallback rules are typically a structural relationship in the caller's own tag-naming
+scheme (e.g. "a `Radio` tag falls back to its `Checkbox` equivalent") rather than
+per-theme data, so `ClearThemeMap` deliberately leaves them untouched — register them
+once (e.g. at startup) and they'll keep applying across every subsequent theme
+load/switch. Call `ClearFallbacks()` explicitly if a caller does want to reset them.
+
 ## Key API
 
 | Function / method | Purpose |
@@ -162,6 +190,8 @@ companion package, which parses theme files into a map).
 | `Sprintf(fmt, a...)` | Format string then apply `ToANSI` |
 | `RegisterConsoleTag(name, val)` / `…Raw` | Define a base semantic tag |
 | `RegisterThemeTag(name, val)` / `…Raw` | Define a theme semantic tag |
+| `RegisterFallback(name, fallback)` | Resolve `name` as `fallback` when `name` itself is unregistered |
+| `ClearFallbacks()` | Remove all registered fallback rules |
 | `SetThemeMap(m)` | Replace the theme map wholesale |
 | `SetRenderPolicy(fn)` | Gate rendering (return false → `ToPlain` instead of color) |
 | `New()` | Create an independent `*Styler` |

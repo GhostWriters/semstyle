@@ -128,16 +128,86 @@ func (st *Styler) RegisterThemeTagRaw(name, rawValue string) {
 	st.mu.Unlock()
 }
 
+// maxFallbackDepth caps RegisterFallback chain-following so a mistaken or
+// accidental cycle (A falls back to B falls back to A) can't hang resolution
+// -- it just gives up and resolves to unset past this many hops.
+const maxFallbackDepth = 8
+
+// lookupRaw resolves name against styleMap (nil means themeMap) with
+// console-map fallback, the same three-tier lookup GetRawTagCode and
+// ExpandTagsWithMap have always done, then -- if still unresolved --
+// consults any RegisterFallback chain for name, re-running the same
+// three-tier lookup against each fallback name in turn. Callers must already
+// hold st.mu (read or write); this method takes no lock itself.
+func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string) (string, bool) {
+	m := styleMap
+	if m == nil {
+		m = st.themeMap
+	}
+	seen := make(map[string]bool, maxFallbackDepth)
+	for range maxFallbackDepth {
+		if seen[name] {
+			return "", false // cycle guard
+		}
+		seen[name] = true
+
+		var raw string
+		var ok bool
+		if prefix != "" {
+			raw, ok = m[prefix+name]
+		}
+		if !ok {
+			raw, ok = m[name]
+		}
+		if !ok {
+			raw, ok = st.consoleMap[name]
+		}
+		if ok {
+			return raw, true
+		}
+
+		fb, hasFallback := st.fallbackMap[name]
+		if !hasFallback {
+			return "", false
+		}
+		name = fb
+	}
+	return "", false
+}
+
+// RegisterFallback declares that, when name isn't registered in the theme or
+// console map, tag resolution should use fallback's value instead of
+// resolving to nothing. Applies everywhere a tag name is resolved --
+// GetRawTagCode, GetColorDefinition, and inline "{{|name|}}" text expansion
+// -- not just one call site, so a caller need not re-derive the fallback at
+// each place it references the tag. fallback may itself have its own
+// RegisterFallback entry; chains are followed up to maxFallbackDepth hops.
+func (st *Styler) RegisterFallback(name, fallback string) {
+	st.ensureMaps()
+	st.mu.Lock()
+	if st.fallbackMap == nil {
+		st.fallbackMap = make(map[string]string)
+	}
+	st.fallbackMap[strings.ToLower(name)] = strings.ToLower(fallback)
+	st.mu.Unlock()
+}
+
+// ClearFallbacks removes all registered fallback rules. Also called by
+// ClearThemeMap, since fallback rules (like the theme map itself) are
+// typically re-registered fresh on every theme load.
+func (st *Styler) ClearFallbacks() {
+	st.mu.Lock()
+	st.fallbackMap = make(map[string]string)
+	st.mu.Unlock()
+}
+
 // GetRawTagCode returns the raw style code (fg:bg:flags) for the given tag name from the theme map.
-// Returns "" if the tag is not registered.
+// Returns "" if the tag is not registered and has no resolvable fallback.
 func (st *Styler) GetRawTagCode(name string) string {
 	st.ensureMaps()
 	st.mu.RLock()
-	raw := st.themeMap[strings.ToLower(name)]
-	if raw == "" {
-		raw = st.consoleMap[strings.ToLower(name)]
-	}
-	st.mu.RUnlock()
+	defer st.mu.RUnlock()
+	raw, _ := st.lookupRaw(nil, "", strings.ToLower(name))
 	return raw
 }
 
@@ -164,13 +234,10 @@ func (st *Styler) GetColorDefinition(name string) string {
 	content := strings.ToLower(name)
 
 	st.mu.RLock()
-	raw, ok := st.themeMap[content]
-	if !ok {
-		raw = st.consoleMap[content]
-	}
+	raw, ok := st.lookupRaw(nil, "", content)
 	st.mu.RUnlock()
 
-	if raw == "" {
+	if !ok || raw == "" {
 		return ""
 	}
 	return st.WrapDirect(raw)
@@ -207,7 +274,14 @@ func (st *Styler) UnregisterPrefix(prefix string) {
 	st.mu.Unlock()
 }
 
-// ClearThemeMap removes all entries from the theme map.
+// ClearThemeMap removes all entries from the theme map. Fallback rules
+// (RegisterFallback) are left untouched -- unlike theme tag values, a
+// fallback rule is typically a structural relationship in the caller's own
+// tag-naming scheme (e.g. "a Radio tag falls back to its Checkbox
+// equivalent") that holds regardless of which theme is loaded, so callers
+// registering such rules should do so once (e.g. at startup) rather than
+// re-registering on every theme load. Call ClearFallbacks explicitly if a
+// caller does want a clean slate.
 func (st *Styler) ClearThemeMap() {
 	st.mu.Lock()
 	st.themeMap = make(map[string]string)
@@ -267,6 +341,14 @@ func RegisterThemeTagRaw(name, rawValue string) {
 
 func GetRawTagCode(name string) string {
 	return Default.GetRawTagCode(name)
+}
+
+func RegisterFallback(name, fallback string) {
+	Default.RegisterFallback(name, fallback)
+}
+
+func ClearFallbacks() {
+	Default.ClearFallbacks()
 }
 
 func RegisterSemanticTag(name, taggedValue string) {
