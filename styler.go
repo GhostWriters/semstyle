@@ -24,6 +24,11 @@ type Styler struct {
 	// "{{|name|}}" text expansion) so a fallback rule applies uniformly
 	// wherever a tag can appear, not just one call site.
 	fallbackMap map[string]fallbackRule
+	// disableAutoConsoleFallback, when true, stops directLookup from
+	// automatically checking the console map once the theme map lookup
+	// fails. False (the zero value) preserves the library's original
+	// behavior. See SetAutoConsoleFallback.
+	disableAutoConsoleFallback bool
 	// ansiMap: color/modifier names -> ANSI code.
 	ansiMap map[string]string
 	// attributeMap: non-color attribute names -> ANSI code.

@@ -141,6 +141,9 @@ func RegisterFallback(name string, followChains bool, candidates ...string) {
 	semstyle.RegisterFallback(name, followChains, candidates...)
 }
 func ClearFallbacks()                       { semstyle.ClearFallbacks() }
+func AutoConsoleFallback() bool             { return semstyle.AutoConsoleFallback() }
+func SetAutoConsoleFallback(enabled bool)   { semstyle.SetAutoConsoleFallback(enabled) }
+func ConsoleTag(name string) string         { return semstyle.ConsoleTag(name) }
 func GetColorDefinition(name string) string { return semstyle.GetColorDefinition(name) }
 func UnregisterColor(name string)           { semstyle.UnregisterColor(name) }
 func UnregisterPrefix(prefix string)        { semstyle.UnregisterPrefix(prefix) }

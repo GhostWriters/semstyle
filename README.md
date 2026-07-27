@@ -195,6 +195,33 @@ per-theme data, so `ClearThemeMap` deliberately leaves them untouched — regist
 once (e.g. at startup) and they'll keep applying across every subsequent theme
 load/switch. Call `ClearFallbacks()` explicitly if a caller does want to reset them.
 
+### Automatic console fallback
+
+By default, a theme-mode lookup (`ToANSI`/`ToTags` with a prefix, `GetRawTagCode`,
+`GetColorDefinition`) that doesn't find a tag in the theme map automatically falls
+through to the console map — the library's original behavior. This can surprise a theme
+author who simply forgot to define a tag: the color that appears comes from whatever
+unrelated console-map entry happens to share that name, not from the active theme.
+
+`SetAutoConsoleFallback(false)` disables that automatic tier, so an undefined theme tag
+resolves to nothing (unstyled) instead — a missing definition becomes visible rather
+than silently masked by an unrelated color. Plain console-mode calls (`ToANSI`/`ToTags`
+with no prefix) are unaffected either way, since those already target the console map
+directly rather than going through this secondary tier.
+
+To opt specific tags back into console fallback after disabling the automatic tier, use
+`ConsoleTag(name)` as a `RegisterFallback` candidate:
+
+```go
+semstyle.SetAutoConsoleFallback(false)
+semstyle.RegisterFallback("Highlight", true, semstyle.ConsoleTag("Highlight"))
+```
+
+`ConsoleTag` returns a marked string, not a `"console:Name"`-style prefix — a plain
+string like that would be visually ambiguous with the `Tag:fgColor` modifier convention
+used elsewhere in this package's tag syntax, so `RegisterFallback` never interprets a
+bare string that way.
+
 ## Key API
 
 | Function / method | Purpose |
@@ -209,6 +236,8 @@ load/switch. Call `ClearFallbacks()` explicitly if a caller does want to reset t
 | `RegisterConsoleTag(name, val)` / `…Raw` | Define a base semantic tag |
 | `RegisterThemeTag(name, val)` / `…Raw` | Define a theme semantic tag |
 | `RegisterFallback(name, followChains, candidates...)` | Resolve `name` as the first resolvable candidate when `name` itself is unregistered |
+| `SetAutoConsoleFallback(enabled)` | Enable/disable the automatic theme→console fallback tier (on by default) |
+| `ConsoleTag(name)` | `RegisterFallback` candidate meaning "console map only," for opting a tag back in |
 | `ClearFallbacks()` | Remove all registered fallback rules |
 | `SetThemeMap(m)` | Replace the theme map wholesale |
 | `SetRenderPolicy(fn)` | Gate rendering (return false → `ToPlain` instead of color) |

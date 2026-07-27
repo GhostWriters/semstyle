@@ -49,6 +49,14 @@
 // untouched -- register once and they keep applying across every later
 // theme load/switch. Use [Styler.ClearFallbacks] to reset them explicitly.
 //
+// By default, a theme-mode lookup that misses the theme map automatically
+// falls through to the console map too -- which can surprise a theme
+// author who simply forgot to define a tag, since the resulting color has
+// nothing to do with their theme. [Styler.SetAutoConsoleFallback](false)
+// disables that automatic tier (plain console-mode calls are unaffected
+// either way); [ConsoleTag] lets a specific tag opt back in as a
+// RegisterFallback candidate.
+//
 // # Package-level vs per-instance
 //
 // A process-wide [Default] styler backs the package-level functions. Most

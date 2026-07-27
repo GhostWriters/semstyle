@@ -136,8 +136,11 @@ const maxFallbackDepth = 8
 // directLookup resolves name against styleMap (nil means themeMap) with
 // console-map fallback -- the three-tier lookup GetRawTagCode and
 // ExpandTagsWithMap have always done, with no fallback-chain consultation.
-// Callers must already hold st.mu (read or write); this method takes no
-// lock itself.
+// The console-map tier is skipped when disableAutoConsoleFallback is set
+// (see SetAutoConsoleFallback); an explicit "console:name" fallback
+// candidate (consoleOnlyLookup) is unaffected either way, since that's an
+// intentional per-tag opt-in rather than this automatic tier. Callers must
+// already hold st.mu (read or write); this method takes no lock itself.
 func (st *Styler) directLookup(styleMap map[string]string, prefix, name string) (string, bool) {
 	m := styleMap
 	if m == nil {
@@ -151,27 +154,82 @@ func (st *Styler) directLookup(styleMap map[string]string, prefix, name string) 
 	if raw, ok := m[name]; ok {
 		return raw, true
 	}
-	if raw, ok := st.consoleMap[name]; ok {
-		return raw, true
+	if !st.disableAutoConsoleFallback {
+		if raw, ok := st.consoleMap[name]; ok {
+			return raw, true
+		}
 	}
 	return "", false
 }
 
+// consoleOnlyLookup resolves name against the console map only, regardless
+// of disableAutoConsoleFallback -- used for an explicit "console:name"
+// fallback candidate, a deliberate per-tag opt-in rather than the automatic
+// tier that setting controls. Callers must already hold st.mu.
+func (st *Styler) consoleOnlyLookup(name string) (string, bool) {
+	raw, ok := st.consoleMap[name]
+	return raw, ok
+}
+
+// AutoConsoleFallback reports whether this Styler automatically checks the
+// console map when a theme-mode lookup doesn't find name in the theme map.
+// True by default (the library's original behavior). See
+// SetAutoConsoleFallback.
+func (st *Styler) AutoConsoleFallback() bool {
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	return !st.disableAutoConsoleFallback
+}
+
+// SetAutoConsoleFallback enables or disables automatic console-map fallback
+// for theme-mode lookups (GetRawTagCode, GetColorDefinition, and inline
+// "{{|name|}}" text expansion when using a prefix/theme map). Enabled by
+// default, matching the library's original behavior: an undefined
+// theme-mode tag silently resolves to whatever base/console default
+// happens to share its name -- which can surprise a theme author who
+// simply forgot to define that tag, since the color that appears may have
+// nothing to do with their theme. Disabling this makes an undefined theme
+// tag resolve to nothing (unstyled) instead, so a missing definition is
+// visible rather than silently masked by an unrelated color. A caller that
+// wants specific tags to still fall back to console after disabling this
+// can register that explicitly per tag with RegisterFallback's
+// "console:name" candidate syntax.
+func (st *Styler) SetAutoConsoleFallback(enabled bool) {
+	st.mu.Lock()
+	st.disableAutoConsoleFallback = !enabled
+	st.mu.Unlock()
+}
+
+// fallbackCandidate is one entry in a fallbackRule's candidate list.
+//   - literal: a pre-resolved raw style code (from a direct-tag-syntax
+//     argument, e.g. "{{[white:black:B]}}"), used as-is with no lookup.
+//   - consoleOnly: value is looked up in the console map only (from a
+//     "console:name" argument), regardless of disableAutoConsoleFallback
+//     and with no further chaining -- an explicit, deliberate opt-in.
+//   - otherwise: value is a tag name, resolved the normal way.
+type fallbackCandidate struct {
+	literal     bool
+	consoleOnly bool
+	value       string // raw code if literal, lowercased tag name otherwise
+}
+
 // fallbackRule is one name's registered RegisterFallback rule: an ordered
 // list of candidates (a single-element list for the common one-fallback
-// case) plus whether each candidate follows its own separate rule in turn.
+// case) plus whether each non-literal candidate follows its own separate
+// rule in turn.
 type fallbackRule struct {
-	candidates   []string
+	candidates   []fallbackCandidate
 	followChains bool
 }
 
 // lookupRaw resolves name via directLookup, then -- if still unresolved --
 // consults name's registered fallback rule (RegisterFallback) if any. A
-// single-candidate, chain-following rule is walked in this same loop (so
-// cycle detection covers the whole chain, e.g. A -> B -> C); a multi-
-// candidate list, or a rule with followChains=false, is resolved
-// per-candidate instead (see the loop body for why). Callers must already
-// hold st.mu (read or write); this method takes no lock itself.
+// single non-literal candidate with followChains=true is walked in this
+// same loop (so cycle detection covers the whole chain, e.g. A -> B -> C);
+// anything else (a literal candidate, multiple candidates, or
+// followChains=false) is resolved per-candidate instead (see the loop body
+// for why). Callers must already hold st.mu (read or write); this method
+// takes no lock itself.
 func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string) (string, bool) {
 	seen := make(map[string]bool, maxFallbackDepth)
 	for range maxFallbackDepth {
@@ -189,22 +247,32 @@ func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string) (st
 			return "", false
 		}
 
-		if len(rule.candidates) == 1 && rule.followChains {
+		if len(rule.candidates) == 1 && rule.followChains &&
+			!rule.candidates[0].literal && !rule.candidates[0].consoleOnly {
 			// The common single-fallback-that-chains case: continue this
 			// same loop (not a recursive call) so seen/maxFallbackDepth
 			// cover the whole chain in one place, exactly as a multi-hop
 			// A -> B -> C chain needs.
-			name = rule.candidates[0]
+			name = rule.candidates[0].value
 			continue
 		}
 		for _, candidate := range rule.candidates {
-			if rule.followChains {
-				if raw, ok := st.lookupRaw(styleMap, prefix, candidate); ok {
+			if candidate.literal {
+				return candidate.value, true
+			}
+			if candidate.consoleOnly {
+				if raw, ok := st.consoleOnlyLookup(candidate.value); ok {
 					return raw, true
 				}
 				continue
 			}
-			if raw, ok := st.directLookup(styleMap, prefix, candidate); ok {
+			if rule.followChains {
+				if raw, ok := st.lookupRaw(styleMap, prefix, candidate.value); ok {
+					return raw, true
+				}
+				continue
+			}
+			if raw, ok := st.directLookup(styleMap, prefix, candidate.value); ok {
 				return raw, true
 			}
 		}
@@ -221,8 +289,24 @@ func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string) (st
 // caller need not re-derive the fallback at each place it references the
 // tag.
 //
-// followChains controls whether a candidate that isn't itself directly
-// registered also follows its own separate RegisterFallback rule in turn:
+// Each candidate is normally a tag name (with or without this Styler's
+// semantic delimiters, e.g. "Title" or "{{|Title|}}" are equivalent). A
+// candidate written with direct-tag delimiters instead (e.g.
+// "{{[white:black:B]}}") is a literal: used as a final raw style code with
+// no lookup or further chaining, for a caller that wants an inline default
+// rather than another named tag. A candidate produced by ConsoleTag(name)
+// is looked up in the console map only, regardless of
+// SetAutoConsoleFallback -- for a caller that has disabled the automatic
+// console tier but still wants specific tags to fall back to it
+// deliberately:
+//
+//	semstyle.RegisterFallback("TitleWarn", true, "{{|Title|}}")            // same as "Title"
+//	semstyle.RegisterFallback("TitleWarn", true, "{{[white:black:B]}}")    // literal, no lookup
+//	semstyle.RegisterFallback("TitleWarn", true, semstyle.ConsoleTag("Title")) // console map only
+//
+// followChains controls whether a non-literal candidate that isn't itself
+// directly registered also follows its own separate RegisterFallback rule
+// in turn (irrelevant for a literal candidate, which is never looked up):
 //
 //   - true (the common case, e.g. a single fallback that may itself have a
 //     fallback): a candidate is resolved the same way GetRawTagCode would,
@@ -243,12 +327,48 @@ func (st *Styler) RegisterFallback(name string, followChains bool, candidates ..
 	if st.fallbackMap == nil {
 		st.fallbackMap = make(map[string]fallbackRule)
 	}
-	lowered := make([]string, len(candidates))
+	parsed := make([]fallbackCandidate, len(candidates))
 	for i, c := range candidates {
-		lowered[i] = strings.ToLower(c)
+		parsed[i] = st.parseFallbackCandidate(c)
 	}
-	st.fallbackMap[strings.ToLower(name)] = fallbackRule{candidates: lowered, followChains: followChains}
+	st.fallbackMap[strings.ToLower(name)] = fallbackRule{candidates: parsed, followChains: followChains}
 	st.mu.Unlock()
+}
+
+// consoleTagMarker prefixes a ConsoleTag(name)-produced string. It starts
+// with a NUL byte specifically so it can never collide with anything a
+// human would type as a plain candidate string (e.g. a bare "console:Title"
+// string would be ambiguous with the tag:fgColor modifier convention used
+// elsewhere in this package's tag syntax -- is "console" a tag name and
+// "Title" a color override, or a namespace? A control-character marker a
+// caller can only produce via ConsoleTag has no such reading).
+const consoleTagMarker = "\x00console:"
+
+// ConsoleTag returns a RegisterFallback candidate value meaning "look name
+// up in the console map only, regardless of SetAutoConsoleFallback" -- use
+// as one of RegisterFallback's candidates to opt a specific tag back into
+// console fallback after disabling the automatic tier for this Styler.
+func ConsoleTag(name string) string {
+	return consoleTagMarker + name
+}
+
+// parseFallbackCandidate classifies one RegisterFallback candidate argument:
+// a ConsoleTag(name) marker (checked first) marks the remainder
+// consoleOnly; direct-tag syntax (st.dirPre/dirSuf) becomes a literal raw
+// code; anything else (a bare name, or semantic-tag syntax st.semPre/
+// semSuf) becomes a lowercased tag name. Mirrors the direct-vs-semantic
+// detection RegisterThemeTag/RegisterConsoleTag already do for a
+// registered value.
+func (st *Styler) parseFallbackCandidate(c string) fallbackCandidate {
+	if rest, ok := strings.CutPrefix(c, consoleTagMarker); ok {
+		fc := st.parseFallbackCandidate(rest)
+		fc.consoleOnly = true
+		return fc
+	}
+	if strings.HasPrefix(c, st.dirPre) && strings.HasSuffix(c, st.dirSuf) {
+		return fallbackCandidate{literal: true, value: st.StripDelimiters(c)}
+	}
+	return fallbackCandidate{value: strings.ToLower(st.StripDelimiters(c))}
 }
 
 // ClearFallbacks removes all registered fallback rules. Unlike
@@ -408,6 +528,14 @@ func RegisterFallback(name string, followChains bool, candidates ...string) {
 
 func ClearFallbacks() {
 	Default.ClearFallbacks()
+}
+
+func AutoConsoleFallback() bool {
+	return Default.AutoConsoleFallback()
+}
+
+func SetAutoConsoleFallback(enabled bool) {
+	Default.SetAutoConsoleFallback(enabled)
 }
 
 func RegisterSemanticTag(name, taggedValue string) {
