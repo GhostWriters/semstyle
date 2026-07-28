@@ -219,6 +219,15 @@ func ToANSIOnBackground(s string, bg lipgloss.Style, prefix ...string) string {
 // style's codes, preventing content-level resets from bleeding to the terminal
 // default background. It also ensures the string starts with the parent's full
 // ANSI code so unstyled/plain text inherits the background.
+//
+// A style with no color set at all (e.g. from a "~" hard-reset tag, as
+// opposed to "-"'s soft reset which resolves to a real contextual style)
+// still gets an active CodeReset injected here rather than being treated as
+// "nothing to do." In a renderer that composites its own screen buffer
+// (rather than a bare terminal echoing text linearly), skipping injection
+// entirely would leave whatever was already painted before this text --
+// e.g. a surrounding dialog's background -- showing through, which is the
+// *maintain* behavior "-" is for, not what an explicit hard reset asked for.
 func MaintainBackground(text string, style lipgloss.Style) string {
 	getANSI := func(s lipgloss.Style) string {
 		rendered := s.Render("_")
@@ -227,7 +236,7 @@ func MaintainBackground(text string, style lipgloss.Style) string {
 
 	fullCode := getANSI(style)
 	if fullCode == "" {
-		return text
+		fullCode = semstyle.CodeReset
 	}
 
 	if !strings.HasPrefix(text, "\x1b[") {
