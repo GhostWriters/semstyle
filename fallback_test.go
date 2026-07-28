@@ -519,3 +519,30 @@ func TestGetRawTagCodeWithPrefixUsesFallbackWithinNamespace(t *testing.T) {
 		t.Errorf("GetRawTagCodeWithPrefix(Helpline, preview_) = %q, want %q (should resolve fallback within the prefixed namespace)", got, want)
 	}
 }
+
+// TestGetRawTagCodeWithPrefixFallbackNotShadowedByBareValue reproduces the
+// exact bug this ordering fix addresses: the ACTIVE (bare) namespace has its
+// own EXPLICIT value for a name that the PREFIXED namespace leaves
+// undefined, relying on its fallback rule instead. Resolution must prefer
+// the fallback evaluated within the prefixed namespace, not silently fall
+// through to the unrelated bare namespace's own explicit value just because
+// one happens to exist under the same bare name.
+func TestGetRawTagCodeWithPrefixFallbackNotShadowedByBareValue(t *testing.T) {
+	st := New()
+	st.RegisterFallback("Helpline", true, "StatusBar")
+
+	// Bare (active) namespace: Helpline has its OWN explicit value -- NOT
+	// relying on the fallback at all.
+	st.RegisterThemeTagRaw("helpline", "red:-:-")
+	st.RegisterThemeTagRaw("statusbar", "red:-:B")
+
+	// Prefixed (preview) namespace: Helpline is left undefined, relying on
+	// its fallback to the prefixed StatusBar.
+	st.RegisterThemeTagRaw("preview_statusbar", "blue:-:-")
+
+	got := st.GetRawTagCodeWithPrefix("Helpline", "preview_")
+	want := "blue:-:-" // the PREFIXED StatusBar, not the bare namespace's own red Helpline
+	if got != want {
+		t.Errorf("GetRawTagCodeWithPrefix(Helpline, preview_) = %q, want %q (bare namespace's own value must not shadow the prefixed fallback)", got, want)
+	}
+}

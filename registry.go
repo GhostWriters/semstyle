@@ -256,12 +256,35 @@ func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string) (st
 		}
 		seen[name] = true
 
-		if raw, ok := st.themeOnlyLookup(styleMap, prefix, name); ok {
+		// An exact match in name's OWN namespace always wins outright --
+		// prefix+name when prefix is a separate namespace (e.g. a theme
+		// preview), else bare name. Deliberately NOT also checking the bare
+		// name when prefix is set (that's what themeOnlyLookup does): an
+		// unset name here must resolve its fallback rule within that same
+		// namespace first; only once nothing there resolves it (no rule, or
+		// the rule itself doesn't) is it acceptable to fall through to
+		// whatever the bare/active namespace happens to have under the same
+		// name, below. Skipping straight to the bare match here would let an
+		// unrelated active-namespace value (e.g. the real applied theme's
+		// own explicit definition of the tag the preview left undefined)
+		// silently win over the preview's own, correctly-scoped fallback.
+		m := styleMap
+		if m == nil {
+			m = st.themeMap
+		}
+		if prefix != "" {
+			if raw, ok := m[prefix+name]; ok {
+				return raw, true
+			}
+		} else if raw, ok := m[name]; ok {
 			return raw, true
 		}
 
 		rule, hasRule := st.fallbackMap[name]
 		if !hasRule {
+			if raw, ok := st.themeOnlyLookup(styleMap, prefix, name); ok {
+				return raw, true
+			}
 			if !st.disableAutoConsoleFallback {
 				if raw, ok := st.consoleMap[name]; ok {
 					return raw, true
