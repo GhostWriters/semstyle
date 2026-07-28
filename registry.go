@@ -535,6 +535,26 @@ func (st *Styler) GetRawTagCode(name string) string {
 	return raw
 }
 
+// GetRawTagCodeWithPrefix is GetRawTagCode with a namespace prefix (e.g. a
+// theme preview registered via RegisterInto(data, "Preview_")): name is
+// looked up as prefix+name first, then bare name, and -- critically -- an
+// unset name's fallback rule (registered under the bare, unprefixed name;
+// see RegisterFallback) is itself resolved with the same prefix threaded
+// through each candidate. This is what lets a prefix-registered theme that
+// leaves an optional tag undefined (relying on its fallback, same as the
+// main active theme can) resolve within its own namespace instead of
+// silently returning "" (an unstyled/no-color result masquerading as a
+// missing definition; see ToTags/ExpandTagsWithMap, which already does this
+// for inline "{{|name|}}" text expansion -- this is the missing equivalent
+// for a single tag's raw style code).
+func (st *Styler) GetRawTagCodeWithPrefix(name, prefix string) string {
+	st.ensureMaps()
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	raw, _ := st.lookupRaw(nil, strings.ToLower(prefix), strings.ToLower(name))
+	return raw
+}
+
 // RegisterSemanticTag registers a tag into BOTH the console (base) and theme maps — a
 // convenience for defining a style that should resolve identically whether or not a theme
 // is active. Prefer RegisterConsoleTag / RegisterThemeTag when you want to target one map.
@@ -665,6 +685,10 @@ func RegisterThemeTagRaw(name, rawValue string) {
 
 func GetRawTagCode(name string) string {
 	return Default.GetRawTagCode(name)
+}
+
+func GetRawTagCodeWithPrefix(name, prefix string) string {
+	return Default.GetRawTagCodeWithPrefix(name, prefix)
 }
 
 func RegisterFallback(name string, followChains bool, candidates ...string) {

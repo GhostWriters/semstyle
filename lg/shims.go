@@ -137,6 +137,9 @@ func RegisterSemanticTagRaw(name, rawValue string) { semstyle.RegisterSemanticTa
 func RegisterHyperlinkTag(name string)             { semstyle.RegisterHyperlinkTag(name) }
 func RegisterColor(name, value string)             { semstyle.RegisterColor(name, value) }
 func GetRawTagCode(name string) string             { return semstyle.GetRawTagCode(name) }
+func GetRawTagCodeWithPrefix(name, prefix string) string {
+	return semstyle.GetRawTagCodeWithPrefix(name, prefix)
+}
 func RegisterFallback(name string, followChains bool, candidates ...string) {
 	semstyle.RegisterFallback(name, followChains, candidates...)
 }

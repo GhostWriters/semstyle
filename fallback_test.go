@@ -491,3 +491,31 @@ func TestUndelimitedCandidateWithColonStaysOneName(t *testing.T) {
 		t.Errorf("GetRawTagCode(Y) = %q, want %q (bare candidate with a colon should resolve as one literal name)", got, want)
 	}
 }
+
+// TestGetRawTagCodeWithPrefixUsesFallbackWithinNamespace verifies that a
+// prefix-registered tag (e.g. a theme preview namespace) which leaves an
+// optional tag undefined resolves via that name's fallback rule evaluated
+// WITHIN the prefix's own namespace -- preferring a prefixed override of the
+// fallback target over the bare/global one -- rather than returning "" just
+// because the prefixed name itself was never explicitly registered.
+func TestGetRawTagCodeWithPrefixUsesFallbackWithinNamespace(t *testing.T) {
+	st := New()
+	st.RegisterFallback("Helpline", true, "StatusBar")
+
+	// Bare (active-theme) namespace: StatusBar is defined, Helpline falls
+	// back to it normally.
+	st.RegisterThemeTagRaw("statusbar", "white:blue:-")
+	if got, want := st.GetRawTagCode("Helpline"), "white:blue:-"; got != want {
+		t.Fatalf("GetRawTagCode(Helpline) = %q, want %q", got, want)
+	}
+
+	// Prefixed namespace: only StatusBar is registered under the prefix,
+	// Helpline is left undefined (relies on fallback), and its resolution
+	// must prefer the PREFIXED StatusBar over the bare one above.
+	st.RegisterThemeTagRaw("preview_statusbar", "red:black:B")
+	got := st.GetRawTagCodeWithPrefix("Helpline", "preview_")
+	want := "red:black:B"
+	if got != want {
+		t.Errorf("GetRawTagCodeWithPrefix(Helpline, preview_) = %q, want %q (should resolve fallback within the prefixed namespace)", got, want)
+	}
+}
