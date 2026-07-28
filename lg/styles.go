@@ -211,7 +211,18 @@ func ToANSIOnBackground(s string, bg lipgloss.Style, prefix ...string) string {
 		r := st.Render("_")
 		return strings.Split(r, "_")[0]
 	}
-	full := getANSI(bg) + rendered + semstyle.CodeReset
+	bgCode := getANSI(bg)
+	if bgCode == "" {
+		// A blank (hard-reset) bg style still needs an active reset here,
+		// not an empty prefix -- otherwise "full" starts directly with
+		// rendered's own leading ANSI codes (e.g. from styled log content
+		// like a colored "[ERROR]" tag), which makes MaintainBackground's
+		// "already starts with an escape code" check below skip injecting
+		// anything at all, silently keeping whatever was painted before
+		// this text instead of the active reset a blank bg asked for.
+		bgCode = semstyle.CodeReset
+	}
+	full := bgCode + rendered + semstyle.CodeReset
 	return MaintainBackground(full, bg)
 }
 
