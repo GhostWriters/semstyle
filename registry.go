@@ -222,6 +222,7 @@ type fallbackCandidate struct {
 	literal     bool
 	consoleOnly bool
 	value       string // raw code if literal, lowercased tag name otherwise
+	modifier    string // optional fg:bg:flags override merged onto value's resolved raw code, e.g. "Screen:::D"'s "::D"
 }
 
 // fallbackRule is one name's registered RegisterFallback rule: an ordered
@@ -270,11 +271,15 @@ func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string) (st
 		}
 
 		if len(rule.candidates) == 1 && rule.followChains &&
-			!rule.candidates[0].literal && !rule.candidates[0].consoleOnly {
+			!rule.candidates[0].literal && !rule.candidates[0].consoleOnly &&
+			rule.candidates[0].modifier == "" {
 			// The common single-fallback-that-chains case: continue this
 			// same loop (not a recursive call) so seen/maxFallbackDepth
 			// cover the whole chain in one place, exactly as a multi-hop
-			// A -> B -> C chain needs.
+			// A -> B -> C chain needs. Excludes a candidate with a
+			// modifier since that needs the base fully resolved first
+			// (below) before the modifier can be merged onto it -- "continue"
+			// would apply the modifier to the wrong (intermediate) step.
 			name = rule.candidates[0].value
 			continue
 		}
@@ -284,18 +289,18 @@ func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string) (st
 			}
 			if candidate.consoleOnly {
 				if raw, ok := st.consoleOnlyLookup(candidate.value); ok {
-					return raw, true
+					return mergeRawCode(raw, candidate.modifier), true
 				}
 				continue
 			}
 			if rule.followChains {
 				if raw, ok := st.lookupRaw(styleMap, prefix, candidate.value); ok {
-					return raw, true
+					return mergeRawCode(raw, candidate.modifier), true
 				}
 				continue
 			}
 			if raw, ok := st.directLookup(styleMap, prefix, candidate.value); ok {
-				return raw, true
+				return mergeRawCode(raw, candidate.modifier), true
 			}
 		}
 		return "", false
@@ -340,7 +345,8 @@ func (st *Styler) resolveFallbackViaLookup(name string, lookup func(string) (str
 	}
 
 	if len(rule.candidates) == 1 && rule.followChains &&
-		!rule.candidates[0].literal && !rule.candidates[0].consoleOnly {
+		!rule.candidates[0].literal && !rule.candidates[0].consoleOnly &&
+		rule.candidates[0].modifier == "" {
 		cand := rule.candidates[0].value
 		if raw, ok := lookup(cand); ok {
 			return raw, true
@@ -353,16 +359,16 @@ func (st *Styler) resolveFallbackViaLookup(name string, lookup func(string) (str
 		}
 		if candidate.consoleOnly {
 			if raw, ok := st.consoleOnlyLookup(candidate.value); ok {
-				return raw, true
+				return mergeRawCode(raw, candidate.modifier), true
 			}
 			continue
 		}
 		if raw, ok := lookup(candidate.value); ok {
-			return raw, true
+			return mergeRawCode(raw, candidate.modifier), true
 		}
 		if rule.followChains {
 			if raw, ok := st.resolveFallbackViaLookup(candidate.value, lookup, seen); ok {
-				return raw, true
+				return mergeRawCode(raw, candidate.modifier), true
 			}
 		}
 	}
@@ -456,7 +462,58 @@ func (st *Styler) parseFallbackCandidate(c string) fallbackCandidate {
 	if strings.HasPrefix(c, st.dirPre) && strings.HasSuffix(c, st.dirSuf) {
 		return fallbackCandidate{literal: true, value: st.StripDelimiters(c)}
 	}
+	// A candidate explicitly wrapped in semantic delimiters may carry an
+	// fg:bg:flags modifier suffix after its first colon, exactly like an
+	// inline semantic tag reference (e.g. "{{|Screen:::D|}}"). The
+	// modifier is merged onto the resolved base tag's raw code by
+	// lookupRaw/resolveFallbackViaLookup, the same override semantics
+	// mergeStyle uses for inline tag modifiers: a non-empty fg/bg field
+	// replaces the base's, and a flags field starting with "-" resets the
+	// base's flags before applying the rest. A bare (undelimited)
+	// candidate is never split this way -- it's always one literal tag
+	// name, colons and all (e.g. a plain "console:Title" string, distinct
+	// from the ConsoleTag(name) marker, must keep resolving as the single
+	// tag name "console:title").
+	if strings.HasPrefix(c, st.semPre) && strings.HasSuffix(c, st.semSuf) {
+		stripped := st.StripDelimiters(c)
+		name, modifier, _ := strings.Cut(stripped, ":")
+		return fallbackCandidate{value: strings.ToLower(name), modifier: modifier}
+	}
 	return fallbackCandidate{value: strings.ToLower(st.StripDelimiters(c))}
+}
+
+// mergeRawCode merges a modifier suffix (fg:bg:flags, any field optionally
+// empty) onto a base raw code (fg:bg:flags), matching the override
+// semantics inline tag modifiers use (see parseFallbackCandidate): a
+// non-empty fg/bg field replaces the base's, and a flags field prefixed
+// with "-" resets the base's flags before applying what follows the dash.
+func mergeRawCode(base, modifier string) string {
+	if modifier == "" {
+		return base
+	}
+	baseParts := strings.SplitN(base, ":", 3)
+	for len(baseParts) < 3 {
+		baseParts = append(baseParts, "")
+	}
+	modParts := strings.SplitN(modifier, ":", 3)
+	for len(modParts) < 3 {
+		modParts = append(modParts, "")
+	}
+	fg, bg, flags := baseParts[0], baseParts[1], baseParts[2]
+	if modParts[0] != "" {
+		fg = modParts[0]
+	}
+	if modParts[1] != "" {
+		bg = modParts[1]
+	}
+	if modParts[2] != "" {
+		if after, ok := strings.CutPrefix(modParts[2], "-"); ok {
+			flags = after
+		} else {
+			flags += modParts[2]
+		}
+	}
+	return fg + ":" + bg + ":" + flags
 }
 
 // ClearFallbacks removes all registered fallback rules. Unlike

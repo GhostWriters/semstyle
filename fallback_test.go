@@ -431,3 +431,63 @@ func TestFollowChainsFalseSkipsCandidatesOwnRule(t *testing.T) {
 		t.Errorf("GetRawTagCode(TitleWarn) = %q, want empty (Title's own rule should NOT be chased under followChains=false)", got)
 	}
 }
+
+// TestRegisterFallbackCandidateWithModifier verifies a semantic-delimited
+// candidate can carry an fg:bg:flags modifier suffix (e.g.
+// "{{|Screen:::D|}}"), merged onto the resolved base tag's raw code with
+// the same override semantics inline tag modifiers use.
+func TestRegisterFallbackCandidateWithModifier(t *testing.T) {
+	st := New()
+	st.RegisterThemeTagRaw("screen", "white:black:-")
+	st.RegisterFallback("Shadow", true, "{{|Screen:::D|}}")
+
+	got := st.GetRawTagCode("Shadow")
+	want := "white:black:-D"  // leading "-" on flags is the reset-then-apply marker; CodeToFlags strips it before parsing
+	if got != want {
+		t.Errorf("GetRawTagCode(Shadow) = %q, want %q", got, want)
+	}
+}
+
+// TestRegisterFallbackCandidateModifierOverridesFgBg verifies a non-empty
+// fg/bg field in the modifier replaces the base's, not just appends flags.
+func TestRegisterFallbackCandidateModifierOverridesFgBg(t *testing.T) {
+	st := New()
+	st.RegisterThemeTagRaw("title", "white:black:B")
+	st.RegisterFallback("Warn", true, "{{|Title:yellow|}}")
+
+	got := st.GetRawTagCode("Warn")
+	want := "yellow:black:B"
+	if got != want {
+		t.Errorf("GetRawTagCode(Warn) = %q, want %q", got, want)
+	}
+}
+
+// TestRegisterFallbackCandidateModifierResetsFlags verifies a flags field
+// prefixed with "-" resets the base's flags before applying the rest.
+func TestRegisterFallbackCandidateModifierResetsFlags(t *testing.T) {
+	st := New()
+	st.RegisterThemeTagRaw("title", "white:black:BU")
+	st.RegisterFallback("Plain", true, "{{|Title:::-|}}")
+
+	got := st.GetRawTagCode("Plain")
+	want := "white:black:"
+	if got != want {
+		t.Errorf("GetRawTagCode(Plain) = %q, want %q", got, want)
+	}
+}
+
+// TestUndelimitedCandidateWithColonStaysOneName verifies a bare
+// (undelimited) candidate containing a colon is never split into a
+// name+modifier -- it's always one literal tag name, preserving the
+// pre-existing ConsoleTag disambiguation guarantee.
+func TestUndelimitedCandidateWithColonStaysOneName(t *testing.T) {
+	st := New()
+	st.RegisterThemeTagRaw("weird:name", "red:-:-")
+	st.RegisterFallback("Y", false, "weird:name")
+
+	got := st.GetRawTagCode("Y")
+	want := "red:-:-"
+	if got != want {
+		t.Errorf("GetRawTagCode(Y) = %q, want %q (bare candidate with a colon should resolve as one literal name)", got, want)
+	}
+}
