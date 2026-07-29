@@ -98,6 +98,18 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 		}
 		if inner == "-" {
 			inner = "-:-:-"
+		} else if inner == "~" {
+			// Hard reset, per field: CodeToStyle's exact "~" fast path never
+			// sees this once expanded (it only matches a lone, un-suffixed
+			// "~"), but the field-level "~" case it also implements
+			// (explicit empty Color per channel) is exactly equivalent for
+			// rendering purposes, and -- unlike the fast path -- leaves a
+			// distinguishable, explicitly-empty Color rather than an unset
+			// lipgloss.NoColor{} zero value. That distinction is what lets a
+			// caller like DS2's "no explicit background -> inherit Dialog's"
+			// convention (a plain lipgloss.NoColor{} check) tell an author's
+			// deliberate "~" apart from simply never specifying a color.
+			inner = "~:~:"
 		}
 
 		parts := strings.Split(inner, ":")
