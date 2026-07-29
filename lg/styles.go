@@ -114,24 +114,29 @@ func CodeToFlags(rawCode string) StyleFlags {
 	return f
 }
 
-// ansiDefaultForeground and ansiDefaultBackground actively reset just one
-// channel to the terminal's own default color (SGR 39/49) -- unlike
-// omitting Foreground/Background entirely, which lipgloss.Style.Render
-// renders as zero bytes for that channel (nothing "unset" to emit), letting
-// whatever color preceded this text on the same output stream bleed
-// through instead of truly deferring to the terminal. See the "~"
-// (hard reset) handling below.
+// hardReset{Full,FG,BG} are real, standards-compliant SGR sequences for an
+// explicit "~" hard reset -- deliberately written as redundant/combined
+// multi-parameter escapes ("0;39;49" instead of bare "0"; "39;39" instead
+// of bare "39") rather than the single-parameter form MaintainBackground's
+// own regex looks for. A terminal (or any ANSI-aware width/wrap calculator,
+// which is all that matters for surviving intermediate text processing --
+// no separate marker-resolution step is needed) treats them identically to
+// the bare form; MaintainBackground's narrow single-parameter match simply
+// doesn't recognize them as the routine reset it's designed to augment
+// with the caller's own ambient style, so a hard reset passes through
+// completely untouched while an ordinary "-" reset still gets maintained.
 const (
-	ansiDefaultForeground = "\x1b[39m"
-	ansiDefaultBackground = "\x1b[49m"
+	hardResetFull = "\x1b[0;39;49m"
+	hardResetFG   = "\x1b[39;39m"
+	hardResetBG   = "\x1b[49;49m"
 )
 
-// withHardResetPrefix attaches (composing with any transform style already
+// withStaticPrefix attaches (composing with any transform style already
 // carries) a Transform that prepends prefix to the rendered output -- the
 // only way to guarantee those bytes actually appear, since a Style with
 // nothing "set" on a channel emits nothing for it at Render time regardless
 // of intent.
-func withHardResetPrefix(style lipgloss.Style, prefix string) lipgloss.Style {
+func withStaticPrefix(style lipgloss.Style, prefix string) lipgloss.Style {
 	existing := style.GetTransform()
 	return style.Transform(func(s string) string {
 		if existing != nil {
@@ -144,7 +149,7 @@ func withHardResetPrefix(style lipgloss.Style, prefix string) lipgloss.Style {
 // CodeToStyle applies a raw fg:bg:flags code to a lipgloss.Style.
 func CodeToStyle(styleCode string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
 	if styleCode == "~" {
-		return withHardResetPrefix(lipgloss.NewStyle(), semstyle.CodeReset)
+		return withStaticPrefix(lipgloss.NewStyle(), hardResetFull)
 	}
 	if styleCode == semstyle.CodeReset || styleCode == "-" {
 		return resetStyle
@@ -160,7 +165,7 @@ func CodeToStyle(styleCode string, style lipgloss.Style, resetStyle lipgloss.Sty
 		switch parts[0] {
 		case "~":
 			style = style.Foreground(lipgloss.Color(""))
-			style = withHardResetPrefix(style, ansiDefaultForeground)
+			style = withStaticPrefix(style, hardResetFG)
 		case "-":
 			style = style.Foreground(resetStyle.GetForeground())
 		default:
@@ -174,7 +179,7 @@ func CodeToStyle(styleCode string, style lipgloss.Style, resetStyle lipgloss.Sty
 		switch parts[1] {
 		case "~":
 			style = style.Background(lipgloss.Color(""))
-			style = withHardResetPrefix(style, ansiDefaultBackground)
+			style = withStaticPrefix(style, hardResetBG)
 		case "-":
 			style = style.Background(resetStyle.GetBackground())
 		default:
@@ -255,19 +260,25 @@ func ToANSIOnBackground(s string, bg lipgloss.Style, prefix ...string) string {
 	return MaintainBackground(full, bg)
 }
 
-// MaintainBackground replaces ANSI resets with the reset followed by the parent
-// style's codes, preventing content-level resets from bleeding to the terminal
-// default background. It also ensures the string starts with the parent's full
-// ANSI code so unstyled/plain text inherits the background.
+// MaintainBackground replaces bare single-parameter ANSI resets (0, 39, 49)
+// with the reset followed by the parent style's own codes, preventing
+// content-level resets from bleeding to the terminal default background. It
+// also ensures the string starts with the parent's full ANSI code so
+// unstyled/plain text inherits the background.
 //
-// A style with no color set at all (e.g. from a "~" hard-reset tag, as
-// opposed to "-"'s soft reset which resolves to a real contextual style)
-// still gets an active CodeReset injected here rather than being treated as
-// "nothing to do." In a renderer that composites its own screen buffer
-// (rather than a bare terminal echoing text linearly), skipping injection
-// entirely would leave whatever was already painted before this text --
-// e.g. a surrounding dialog's background -- showing through, which is the
-// *maintain* behavior "-" is for, not what an explicit hard reset asked for.
+// A style with no color set at all (e.g. one built by a caller with nothing
+// to say about foreground/background) still gets an active CodeReset
+// injected here rather than being treated as "nothing to do." In a renderer
+// that composites its own screen buffer (rather than a bare terminal
+// echoing text linearly), skipping injection entirely would leave whatever
+// was already painted before this text -- e.g. a surrounding dialog's
+// background -- showing through.
+//
+// An explicit "~" hard reset (see CodeToStyle) is a different case: it
+// deliberately never appears here as one of the bare single-parameter forms
+// this function matches -- it's a real but redundant/combined multi-parameter
+// SGR sequence instead, so it passes through completely untouched rather
+// than getting the caller's ambient style appended after it.
 func MaintainBackground(text string, style lipgloss.Style) string {
 	getANSI := func(s lipgloss.Style) string {
 		rendered := s.Render("_")
