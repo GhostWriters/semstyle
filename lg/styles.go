@@ -114,10 +114,37 @@ func CodeToFlags(rawCode string) StyleFlags {
 	return f
 }
 
+// ansiDefaultForeground and ansiDefaultBackground actively reset just one
+// channel to the terminal's own default color (SGR 39/49) -- unlike
+// omitting Foreground/Background entirely, which lipgloss.Style.Render
+// renders as zero bytes for that channel (nothing "unset" to emit), letting
+// whatever color preceded this text on the same output stream bleed
+// through instead of truly deferring to the terminal. See the "~"
+// (hard reset) handling below.
+const (
+	ansiDefaultForeground = "\x1b[39m"
+	ansiDefaultBackground = "\x1b[49m"
+)
+
+// withHardResetPrefix attaches (composing with any transform style already
+// carries) a Transform that prepends prefix to the rendered output -- the
+// only way to guarantee those bytes actually appear, since a Style with
+// nothing "set" on a channel emits nothing for it at Render time regardless
+// of intent.
+func withHardResetPrefix(style lipgloss.Style, prefix string) lipgloss.Style {
+	existing := style.GetTransform()
+	return style.Transform(func(s string) string {
+		if existing != nil {
+			s = existing(s)
+		}
+		return prefix + s
+	})
+}
+
 // CodeToStyle applies a raw fg:bg:flags code to a lipgloss.Style.
 func CodeToStyle(styleCode string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
 	if styleCode == "~" {
-		return lipgloss.NewStyle()
+		return withHardResetPrefix(lipgloss.NewStyle(), semstyle.CodeReset)
 	}
 	if styleCode == semstyle.CodeReset || styleCode == "-" {
 		return resetStyle
@@ -133,6 +160,7 @@ func CodeToStyle(styleCode string, style lipgloss.Style, resetStyle lipgloss.Sty
 		switch parts[0] {
 		case "~":
 			style = style.Foreground(lipgloss.Color(""))
+			style = withHardResetPrefix(style, ansiDefaultForeground)
 		case "-":
 			style = style.Foreground(resetStyle.GetForeground())
 		default:
@@ -146,6 +174,7 @@ func CodeToStyle(styleCode string, style lipgloss.Style, resetStyle lipgloss.Sty
 		switch parts[1] {
 		case "~":
 			style = style.Background(lipgloss.Color(""))
+			style = withHardResetPrefix(style, ansiDefaultBackground)
 		case "-":
 			style = style.Background(resetStyle.GetBackground())
 		default:
