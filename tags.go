@@ -238,6 +238,12 @@ func (st *Styler) processHyperlinks(text string) string {
 		if len(subMatch) < 4 {
 			return match
 		}
+		// Label and destination are the same string here (whole tag content is the URL),
+		// so HyperlinkModeAuto has nothing extra to show beyond HyperlinkModeInline -- only
+		// HyperlinkModeOff (skip the OSC8 wrap entirely) makes a visible difference.
+		if HyperlinkModeFunc != nil && HyperlinkModeFunc() == HyperlinkModeOff {
+			return match
+		}
 		urlDestination := st.ToPlain(subMatch[2])
 		linkStyle := lipgloss.NewStyle().Hyperlink(urlDestination)
 		return linkStyle.Render(match)
@@ -248,6 +254,28 @@ func (st *Styler) processHyperlinks(text string) string {
 // stripped instead of rendered. The host app sets this to encode its TTY/TUI policy;
 // when nil the engine always renders.
 var RenderPolicy func() bool
+
+// HyperlinkMode selects how processInlineHyperlinks renders an inline hyperlink tag's
+// label and URL.
+type HyperlinkMode int
+
+const (
+	// HyperlinkModeInline renders only the styled label, OSC8-wrapped; the URL itself is
+	// never shown. This is the mode the engine always used before HyperlinkModeFunc
+	// existed, and stays the default when HyperlinkModeFunc is nil.
+	HyperlinkModeInline HyperlinkMode = iota
+	// HyperlinkModeOff renders the label as plain styled text with no OSC8 escape at all.
+	HyperlinkModeOff
+	// HyperlinkModeAuto renders the styled label followed by " (url)", both OSC8-wrapped
+	// to the same destination; the parenthesized URL is faint/unstyled so the pairing
+	// stays legible from punctuation alone even with color stripped (e.g. a log file).
+	HyperlinkModeAuto
+)
+
+// HyperlinkModeFunc, when set, is consulted by processInlineHyperlinks for every inline
+// hyperlink tag it renders. The host app sets this to encode its own hyperlink_mode
+// config, mirroring the RenderPolicy hook. Nil means HyperlinkModeInline for every tag.
+var HyperlinkModeFunc func() HyperlinkMode
 
 // ToANSI converts semantic and direct tags to ANSI escape sequences.
 //
@@ -359,13 +387,31 @@ func (st *Styler) processInlineHyperlinks(text string, prefix ...string) string 
 			styleANSI = st.parseStyleCodeToANSI(styleCode)
 		}
 
-		h := fnv.New32a()
-		_, _ = h.Write([]byte(url))
-		linkID := fmt.Sprintf("id=%d", h.Sum32())
-		hyperlink := lipgloss.NewStyle().Hyperlink(url, linkID).Render(styleANSI + label + CodeReset)
+		mode := HyperlinkModeInline
+		if HyperlinkModeFunc != nil {
+			mode = HyperlinkModeFunc()
+		}
+
+		var rendered string
+		switch mode {
+		case HyperlinkModeOff:
+			rendered = styleANSI + label + CodeReset
+		case HyperlinkModeAuto:
+			h := fnv.New32a()
+			_, _ = h.Write([]byte(url))
+			linkID := fmt.Sprintf("id=%d", h.Sum32())
+			styledLabel := lipgloss.NewStyle().Hyperlink(url, linkID).Render(styleANSI + label + CodeReset)
+			dimURL := lipgloss.NewStyle().Faint(true).Hyperlink(url, linkID).Render(" (" + url + ")")
+			rendered = styledLabel + dimURL
+		default: // HyperlinkModeInline
+			h := fnv.New32a()
+			_, _ = h.Write([]byte(url))
+			linkID := fmt.Sprintf("id=%d", h.Sum32())
+			rendered = lipgloss.NewStyle().Hyperlink(url, linkID).Render(styleANSI + label + CodeReset)
+		}
 
 		out.WriteString(slice[:tagStart])
-		out.WriteString(hyperlink)
+		out.WriteString(rendered)
 		consumed += tagEnd + resetLoc[1]
 	}
 
