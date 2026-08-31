@@ -272,6 +272,28 @@ const (
 	HyperlinkModeAuto
 )
 
+// locationOnlyFlag, when present in an inline hyperlink tag's flags field (the 3rd
+// fg:bg:flags modifier field), marks that tag's label as being the location itself --
+// not separate descriptive text pointing at it (e.g. one segment of a hyperlinked file
+// path, where the label is literally a piece of the destination spelled out). See
+// hasLocationOnlyFlag.
+const locationOnlyFlag = 'N'
+
+// hasLocationOnlyFlag reports whether styleCode's flags field contains locationOnlyFlag.
+// styleCode is "name:fg:bg:flags" for a semantic tag or "fg:bg:flags" for a direct tag --
+// the flags field is the 4th colon-field for the former, the 3rd for the latter.
+func hasLocationOnlyFlag(styleCode string, isSemantic bool) bool {
+	parts := strings.Split(styleCode, ":")
+	idx := 2
+	if isSemantic {
+		idx = 3
+	}
+	if idx >= len(parts) {
+		return false
+	}
+	return strings.ContainsRune(parts[idx], locationOnlyFlag)
+}
+
 // HyperlinkModeFunc, when set, is consulted by processInlineHyperlinks for every inline
 // hyperlink tag it renders. The host app sets this to encode its own hyperlink_mode
 // config, mirroring the RenderPolicy hook. Nil means HyperlinkModeInline for every tag.
@@ -388,6 +410,15 @@ func (st *Styler) processInlineHyperlinks(text string, prefix ...string) string 
 		}
 
 		mode := st.resolveHyperlinkMode()
+		// A tag whose flags field carries locationOnlyFlag is telling us its label is just
+		// the location itself, spelled out (e.g. one segment of a hyperlinked file path) --
+		// not separate descriptive text pointing at the location. HyperlinkModeAuto's whole
+		// point is showing a destination the label doesn't already reveal, so it has nothing
+		// to add here; downgrade to Inline (Off is left alone -- the caller may still want
+		// no link at all).
+		if mode == HyperlinkModeAuto && hasLocationOnlyFlag(styleCode, isSemantic) {
+			mode = HyperlinkModeInline
+		}
 
 		var rendered string
 		switch mode {

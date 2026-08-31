@@ -101,6 +101,30 @@ func TestHyperlinkModeSetOnStylerOverridesGlobalFunc(t *testing.T) {
 	}
 }
 
+func TestHyperlinkModeAutoLocationOnlyFlagDowngradesToInline(t *testing.T) {
+	SetPreferredProfile(colorprofile.TrueColor)
+	HyperlinkModeFunc = func() HyperlinkMode { return HyperlinkModeAuto }
+	defer func() { HyperlinkModeFunc = nil }()
+	st := New()
+
+	// A path-segment-style tag: label is just a piece of the location ("clhatch"), not
+	// separate descriptive text -- flags field carries the "N" locationOnly marker.
+	r := st.ToANSI(`{{|Folder:::N:file:///home/clhatch|}}clhatch{{[-]}}`)
+	if strings.Contains(r, " (") {
+		t.Errorf("locationOnly flag should suppress auto's url annotation, got %q", r)
+	}
+	if !strings.Contains(r, "clhatch") || !strings.Contains(r, "\x1b]8;") {
+		t.Errorf("locationOnly flag should still render as a normal Inline hyperlink, got %q", r)
+	}
+
+	// Off must still win over the locationOnly flag.
+	HyperlinkModeFunc = func() HyperlinkMode { return HyperlinkModeOff }
+	r2 := st.ToANSI(`{{|Folder:::N:file:///home/clhatch|}}clhatch{{[-]}}`)
+	if strings.Contains(r2, "\x1b]8;") {
+		t.Errorf("off mode should still suppress the link even with locationOnly set, got %q", r2)
+	}
+}
+
 func TestHyperlinkModeOffOnRegisteredTag(t *testing.T) {
 	SetPreferredProfile(colorprofile.TrueColor)
 	HyperlinkModeFunc = func() HyperlinkMode { return HyperlinkModeOff }
