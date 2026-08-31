@@ -238,6 +238,12 @@ func (st *Styler) processHyperlinks(text string) string {
 		if len(subMatch) < 4 {
 			return match
 		}
+		// Label and destination are the same string here (whole tag content is the URL),
+		// so HyperlinkModeAuto has nothing extra to show beyond HyperlinkModeInline -- only
+		// HyperlinkModeOff (skip the OSC8 wrap entirely) makes a visible difference.
+		if st.resolveHyperlinkMode() == HyperlinkModeOff {
+			return match
+		}
 		urlDestination := st.ToPlain(subMatch[2])
 		linkStyle := lipgloss.NewStyle().Hyperlink(urlDestination)
 		return linkStyle.Render(match)
@@ -248,6 +254,50 @@ func (st *Styler) processHyperlinks(text string) string {
 // stripped instead of rendered. The host app sets this to encode its TTY/TUI policy;
 // when nil the engine always renders.
 var RenderPolicy func() bool
+
+// HyperlinkMode selects how processInlineHyperlinks renders an inline hyperlink tag's
+// label and URL.
+type HyperlinkMode int
+
+const (
+	// HyperlinkModeInline renders only the styled label, OSC8-wrapped; the URL itself is
+	// never shown. This is the mode the engine always used before HyperlinkModeFunc
+	// existed, and stays the default when HyperlinkModeFunc is nil.
+	HyperlinkModeInline HyperlinkMode = iota
+	// HyperlinkModeOff renders the label as plain styled text with no OSC8 escape at all.
+	HyperlinkModeOff
+	// HyperlinkModeAuto renders the styled label followed by " (url)", both OSC8-wrapped
+	// to the same destination; the parenthesized URL is faint/unstyled so the pairing
+	// stays legible from punctuation alone even with color stripped (e.g. a log file).
+	HyperlinkModeAuto
+)
+
+// locationOnlyFlag, when present in an inline hyperlink tag's flags field (the 3rd
+// fg:bg:flags modifier field), marks that tag's label as being the location itself --
+// not separate descriptive text pointing at it (e.g. one segment of a hyperlinked file
+// path, where the label is literally a piece of the destination spelled out). See
+// hasLocationOnlyFlag.
+const locationOnlyFlag = 'N'
+
+// hasLocationOnlyFlag reports whether styleCode's flags field contains locationOnlyFlag.
+// styleCode is "name:fg:bg:flags" for a semantic tag or "fg:bg:flags" for a direct tag --
+// the flags field is the 4th colon-field for the former, the 3rd for the latter.
+func hasLocationOnlyFlag(styleCode string, isSemantic bool) bool {
+	parts := strings.Split(styleCode, ":")
+	idx := 2
+	if isSemantic {
+		idx = 3
+	}
+	if idx >= len(parts) {
+		return false
+	}
+	return strings.ContainsRune(parts[idx], locationOnlyFlag)
+}
+
+// HyperlinkModeFunc, when set, is consulted by processInlineHyperlinks for every inline
+// hyperlink tag it renders. The host app sets this to encode its own hyperlink_mode
+// config, mirroring the RenderPolicy hook. Nil means HyperlinkModeInline for every tag.
+var HyperlinkModeFunc func() HyperlinkMode
 
 // ToANSI converts semantic and direct tags to ANSI escape sequences.
 //
@@ -359,13 +409,43 @@ func (st *Styler) processInlineHyperlinks(text string, prefix ...string) string 
 			styleANSI = st.parseStyleCodeToANSI(styleCode)
 		}
 
-		h := fnv.New32a()
-		_, _ = h.Write([]byte(url))
-		linkID := fmt.Sprintf("id=%d", h.Sum32())
-		hyperlink := lipgloss.NewStyle().Hyperlink(url, linkID).Render(styleANSI + label + CodeReset)
+		mode := st.resolveHyperlinkMode()
+		// A tag whose flags field carries locationOnlyFlag is telling us its label is just
+		// the location itself, spelled out (e.g. one segment of a hyperlinked file path) --
+		// not separate descriptive text pointing at the location. HyperlinkModeAuto's whole
+		// point is showing a destination the label doesn't already reveal, so it has nothing
+		// to add here; downgrade to Inline (Off is left alone -- the caller may still want
+		// no link at all).
+		if mode == HyperlinkModeAuto && hasLocationOnlyFlag(styleCode, isSemantic) {
+			mode = HyperlinkModeInline
+		}
+
+		var rendered string
+		switch mode {
+		case HyperlinkModeOff:
+			rendered = styleANSI + label + CodeReset
+		case HyperlinkModeAuto:
+			// Only the parenthesized URL is the clickable hyperlink here -- the label is
+			// plain styled text, matching how a reader distinguishes "this is the display
+			// text" from "this is the destination" when color is unavailable (see the
+			// design note on HyperlinkModeAuto): making the label itself a link too would
+			// blur that distinction back together, plus giving the terminal two separate
+			// clickable targets for what's really one destination.
+			h := fnv.New32a()
+			_, _ = h.Write([]byte(url))
+			linkID := fmt.Sprintf("id=%d", h.Sum32())
+			plainLabel := styleANSI + label + CodeReset
+			dimURL := lipgloss.NewStyle().Faint(true).Hyperlink(url, linkID).Render(url)
+			rendered = plainLabel + " (" + dimURL + ")"
+		default: // HyperlinkModeInline
+			h := fnv.New32a()
+			_, _ = h.Write([]byte(url))
+			linkID := fmt.Sprintf("id=%d", h.Sum32())
+			rendered = lipgloss.NewStyle().Hyperlink(url, linkID).Render(styleANSI + label + CodeReset)
+		}
 
 		out.WriteString(slice[:tagStart])
-		out.WriteString(hyperlink)
+		out.WriteString(rendered)
 		consumed += tagEnd + resetLoc[1]
 	}
 

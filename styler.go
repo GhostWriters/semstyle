@@ -48,6 +48,12 @@ type Styler struct {
 	// hyperlinkTags: semantic tag names (lowercased) whose content, up to the next reset,
 	// is rendered as a terminal hyperlink. Empty by default (no special hyperlink handling).
 	hyperlinkTags map[string]bool
+
+	// hyperlinkMode, when non-nil, overrides HyperlinkModeFunc for renders through this
+	// Styler specifically -- set via SetHyperlinkMode. Lets one call site force a mode
+	// (mirroring glamour's per-renderer WithHyperlinkMode option) without changing the
+	// process-wide default every other Styler/the Default instance still uses.
+	hyperlinkMode *HyperlinkMode
 }
 
 // Note: the color profile (terminal capability) remains package-level — it describes the
@@ -89,6 +95,40 @@ var Default = New()
 
 // SetRenderPolicy sets the policy consulted by ToConsoleANSI.
 func (st *Styler) SetRenderPolicy(fn func() bool) { st.renderPolicy = fn }
+
+// SetHyperlinkMode forces this Styler's inline hyperlink tags to render in mode,
+// overriding HyperlinkModeFunc for this instance only -- other Stylers (including
+// Default) keep consulting HyperlinkModeFunc as normal. Use ClearHyperlinkMode to go
+// back to that shared default.
+func (st *Styler) SetHyperlinkMode(mode HyperlinkMode) {
+	st.mu.Lock()
+	st.hyperlinkMode = &mode
+	st.mu.Unlock()
+}
+
+// ClearHyperlinkMode removes a mode set by SetHyperlinkMode, reverting this Styler to
+// consulting HyperlinkModeFunc (or HyperlinkModeInline if that's nil too).
+func (st *Styler) ClearHyperlinkMode() {
+	st.mu.Lock()
+	st.hyperlinkMode = nil
+	st.mu.Unlock()
+}
+
+// resolveHyperlinkMode returns this Styler's effective hyperlink mode: its own
+// SetHyperlinkMode override when set, else HyperlinkModeFunc's result, else
+// HyperlinkModeInline.
+func (st *Styler) resolveHyperlinkMode() HyperlinkMode {
+	st.mu.RLock()
+	override := st.hyperlinkMode
+	st.mu.RUnlock()
+	if override != nil {
+		return *override
+	}
+	if HyperlinkModeFunc != nil {
+		return HyperlinkModeFunc()
+	}
+	return HyperlinkModeInline
+}
 
 // RegisterHyperlinkTag marks a semantic tag as a hyperlink trigger on the Default styler.
 func RegisterHyperlinkTag(name string) { Default.RegisterHyperlinkTag(name) }
