@@ -46,12 +46,31 @@ func TestHyperlinkModeAuto(t *testing.T) {
 	if !strings.Contains(r, "DockSTARTer") {
 		t.Errorf("auto mode should show the label, got %q", r)
 	}
-	if !strings.Contains(r, "(https://dockstarter.com)") {
-		t.Errorf("auto mode should show the parenthesized URL, got %q", r)
+	if !strings.Contains(r, "https://dockstarter.com") {
+		t.Errorf("auto mode should show the URL, got %q", r)
 	}
-	if strings.Count(r, "\x1b]8;") < 4 {
-		// Two OSC8 open markers (label + url) and two close markers expected.
-		t.Errorf("auto mode should OSC8-wrap both the label and the URL, got %q", r)
+	if !strings.Contains(r, " (") || !strings.Contains(r, ")") {
+		t.Errorf("auto mode should wrap the URL in plain parens, got %q", r)
+	}
+	openParen := strings.Index(r, " (")
+	linkOpen := strings.Index(r, "\x1b]8;")
+	closeParen := strings.LastIndex(r, ")")
+	linkClose := strings.LastIndex(r, "\x1b]8;;\a")
+	if openParen < 0 || linkOpen < openParen {
+		t.Errorf("the opening paren should come before the OSC8 link, got %q", r)
+	}
+	if closeParen < 0 || linkClose < 0 || closeParen < linkClose {
+		t.Errorf("the closing paren should come after the OSC8 link closes, got %q", r)
+	}
+	if strings.Count(r, "\x1b]8;") != 2 {
+		// Exactly one OSC8 open marker and one close marker: only the parenthesized URL
+		// is clickable, the label is plain styled text (not a second, redundant link).
+		t.Errorf("auto mode should OSC8-wrap only the URL, not the label, got %q", r)
+	}
+	labelStart := strings.Index(r, "DockSTARTer")
+	linkStart := strings.Index(r, "\x1b]8;")
+	if labelStart < 0 || linkStart < 0 || labelStart > linkStart {
+		t.Errorf("auto mode's label should appear before its OSC8 link, got %q", r)
 	}
 }
 
@@ -64,20 +83,20 @@ func TestHyperlinkModeSetOnStylerOverridesGlobalFunc(t *testing.T) {
 	st.SetHyperlinkMode(HyperlinkModeAuto)
 
 	r := st.ToANSI(`{{|File::::https://dockstarter.com|}}DockSTARTer{{[-]}}`)
-	if !strings.Contains(r, "(https://dockstarter.com)") {
+	if !strings.Contains(r, " (") || !strings.Contains(r, "https://dockstarter.com") {
 		t.Errorf("per-Styler override should win over the global HyperlinkModeFunc, got %q", r)
 	}
 
 	// The Default styler (and any other Styler) must be unaffected by st's override.
 	other := New()
 	r2 := other.ToANSI(`{{|File::::https://dockstarter.com|}}DockSTARTer{{[-]}}`)
-	if strings.Contains(r2, "(https://dockstarter.com)") {
+	if strings.Contains(r2, " (") {
 		t.Errorf("a Styler without SetHyperlinkMode should still follow HyperlinkModeFunc, got %q", r2)
 	}
 
 	st.ClearHyperlinkMode()
 	r3 := st.ToANSI(`{{|File::::https://dockstarter.com|}}DockSTARTer{{[-]}}`)
-	if strings.Contains(r3, "(https://dockstarter.com)") {
+	if strings.Contains(r3, " (") {
 		t.Errorf("ClearHyperlinkMode should revert to HyperlinkModeFunc (Inline here), got %q", r3)
 	}
 }

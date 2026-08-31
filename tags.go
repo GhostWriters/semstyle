@@ -394,12 +394,18 @@ func (st *Styler) processInlineHyperlinks(text string, prefix ...string) string 
 		case HyperlinkModeOff:
 			rendered = styleANSI + label + CodeReset
 		case HyperlinkModeAuto:
+			// Only the parenthesized URL is the clickable hyperlink here -- the label is
+			// plain styled text, matching how a reader distinguishes "this is the display
+			// text" from "this is the destination" when color is unavailable (see the
+			// design note on HyperlinkModeAuto): making the label itself a link too would
+			// blur that distinction back together, plus giving the terminal two separate
+			// clickable targets for what's really one destination.
 			h := fnv.New32a()
 			_, _ = h.Write([]byte(url))
 			linkID := fmt.Sprintf("id=%d", h.Sum32())
-			styledLabel := lipgloss.NewStyle().Hyperlink(url, linkID).Render(styleANSI + label + CodeReset)
-			dimURL := lipgloss.NewStyle().Faint(true).Hyperlink(url, linkID).Render(" (" + url + ")")
-			rendered = styledLabel + dimURL
+			plainLabel := styleANSI + label + CodeReset
+			dimURL := lipgloss.NewStyle().Faint(true).Hyperlink(url, linkID).Render(url)
+			rendered = plainLabel + " (" + dimURL + ")"
 		default: // HyperlinkModeInline
 			h := fnv.New32a()
 			_, _ = h.Write([]byte(url))
