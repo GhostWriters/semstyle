@@ -55,6 +55,33 @@ func TestHyperlinkModeAuto(t *testing.T) {
 	}
 }
 
+func TestHyperlinkModeSetOnStylerOverridesGlobalFunc(t *testing.T) {
+	SetPreferredProfile(colorprofile.TrueColor)
+	HyperlinkModeFunc = func() HyperlinkMode { return HyperlinkModeInline }
+	defer func() { HyperlinkModeFunc = nil }()
+
+	st := New()
+	st.SetHyperlinkMode(HyperlinkModeAuto)
+
+	r := st.ToANSI(`{{|File::::https://dockstarter.com|}}DockSTARTer{{[-]}}`)
+	if !strings.Contains(r, "(https://dockstarter.com)") {
+		t.Errorf("per-Styler override should win over the global HyperlinkModeFunc, got %q", r)
+	}
+
+	// The Default styler (and any other Styler) must be unaffected by st's override.
+	other := New()
+	r2 := other.ToANSI(`{{|File::::https://dockstarter.com|}}DockSTARTer{{[-]}}`)
+	if strings.Contains(r2, "(https://dockstarter.com)") {
+		t.Errorf("a Styler without SetHyperlinkMode should still follow HyperlinkModeFunc, got %q", r2)
+	}
+
+	st.ClearHyperlinkMode()
+	r3 := st.ToANSI(`{{|File::::https://dockstarter.com|}}DockSTARTer{{[-]}}`)
+	if strings.Contains(r3, "(https://dockstarter.com)") {
+		t.Errorf("ClearHyperlinkMode should revert to HyperlinkModeFunc (Inline here), got %q", r3)
+	}
+}
+
 func TestHyperlinkModeOffOnRegisteredTag(t *testing.T) {
 	SetPreferredProfile(colorprofile.TrueColor)
 	HyperlinkModeFunc = func() HyperlinkMode { return HyperlinkModeOff }

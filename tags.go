@@ -241,7 +241,7 @@ func (st *Styler) processHyperlinks(text string) string {
 		// Label and destination are the same string here (whole tag content is the URL),
 		// so HyperlinkModeAuto has nothing extra to show beyond HyperlinkModeInline -- only
 		// HyperlinkModeOff (skip the OSC8 wrap entirely) makes a visible difference.
-		if HyperlinkModeFunc != nil && HyperlinkModeFunc() == HyperlinkModeOff {
+		if st.resolveHyperlinkMode() == HyperlinkModeOff {
 			return match
 		}
 		urlDestination := st.ToPlain(subMatch[2])
@@ -387,10 +387,7 @@ func (st *Styler) processInlineHyperlinks(text string, prefix ...string) string 
 			styleANSI = st.parseStyleCodeToANSI(styleCode)
 		}
 
-		mode := HyperlinkModeInline
-		if HyperlinkModeFunc != nil {
-			mode = HyperlinkModeFunc()
-		}
+		mode := st.resolveHyperlinkMode()
 
 		var rendered string
 		switch mode {
