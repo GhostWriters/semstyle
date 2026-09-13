@@ -1,6 +1,7 @@
 package semstyle
 
 import (
+	"context"
 	"fmt"
 	"image/color"
 	"strings"
@@ -30,12 +31,27 @@ var ansiColorIndex = map[string]string{
 	"bright-white":   "15",
 }
 
-// ToColor converts a color name or hex string to a color.Color.
+// ToColor converts a color name or hex string to a color.Color, with no
+// tint applied (equivalent to ToColorCtx(context.Background(), c)).
 func ToColor(c string) color.Color {
+	return ToColorCtx(context.Background(), c)
+}
+
+// ToColorCtx is ToColor, but for one of the 16 standard ANSI color names,
+// checks ctx's registered tint (see WithTint) first -- substituting its
+// literal hex value in place of the plain ANSI-index color those names
+// otherwise resolve to. Falls through to the untinted behavior when ctx
+// carries no tint, or the tint doesn't set that particular slot.
+func ToColorCtx(ctx context.Context, c string) color.Color {
 	c = strings.ToLower(strings.TrimSpace(c))
 
 	if strings.HasPrefix(c, "#") {
 		return lipgloss.Color(c)
+	}
+	if _, ok := ansiColorIndex[c]; ok {
+		if hex, ok := tintColorForCtx(ctx, c); ok {
+			return lipgloss.Color(hex)
+		}
 	}
 	if idx, ok := ansiColorIndex[c]; ok {
 		return lipgloss.Color(idx)

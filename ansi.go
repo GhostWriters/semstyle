@@ -1,6 +1,7 @@
 package semstyle
 
 import (
+	"context"
 	"fmt"
 	"image/color"
 	"regexp"
@@ -10,28 +11,57 @@ import (
 	tcellColor "github.com/gdamore/tcell/v3/color"
 )
 
+// bareReset is the trailing reset lipgloss actually appends when rendering
+// an empty string with a style set -- confirmed via
+// lipgloss.NewStyle().Foreground(...).Render(""): "\x1b[38;2;rr;gg;bbm\x1b[m",
+// the short/bare form (no explicit "0"), not CodeReset ("\x1b[0m"). Trimming
+// only CodeReset here silently left this suffix in place, which reset the
+// color immediately before whatever content followed it -- e.g. an
+// extended/hex color (or a semstyle tint substitution) rendering as
+// invisible/default-colored text, since only a later, separately-appended
+// SGR code (like a bold flag) would still show.
+const bareReset = "\x1b[m"
+
 // colorToFGSequence returns the ANSI opening sequence for a foreground color,
 // using the lipgloss renderer (profile-aware via Bubble Tea or auto-detected).
 func colorToFGSequence(c color.Color) string {
 	rendered := lipgloss.NewStyle().Foreground(c).Render("")
-	return strings.TrimSuffix(rendered, CodeReset)
+	rendered = strings.TrimSuffix(rendered, CodeReset)
+	return strings.TrimSuffix(rendered, bareReset)
 }
 
 // colorToBGSequence returns the ANSI opening sequence for a background color.
 func colorToBGSequence(c color.Color) string {
 	rendered := lipgloss.NewStyle().Background(c).Render("")
-	return strings.TrimSuffix(rendered, CodeReset)
+	rendered = strings.TrimSuffix(rendered, CodeReset)
+	return strings.TrimSuffix(rendered, bareReset)
 }
 
-// parseStyleCodeToANSI parses fg:bg:flags format and returns ANSI codes.
-// Uses the lipgloss global renderer (set from colorprofile in profile.go).
+// parseStyleCodeToANSI parses fg:bg:flags format and returns ANSI codes,
+// with no tint applied (equivalent to parseStyleCodeToANSICtx(context.
+// Background(), content)).
 func (st *Styler) parseStyleCodeToANSI(content string) string {
+	return st.parseStyleCodeToANSICtx(context.Background(), content)
+}
+
+// parseStyleCodeToANSICtx is parseStyleCodeToANSI, but for each of the 16
+// standard ANSI color names (fg and bg), checks ctx's registered tint (see
+// WithTint) first -- substituting its literal hex value in place of the
+// plain ANSI-index code those names otherwise resolve to. Falls through to
+// the untinted behavior when ctx carries no tint, or the tint doesn't set
+// that particular slot.
+// Uses the lipgloss global renderer (set from colorprofile in profile.go).
+func (st *Styler) parseStyleCodeToANSICtx(ctx context.Context, content string) string {
 	if content == "-" {
 		return CodeReset
 	}
 	if content == "~" {
 		return CodeHardReset
 	}
+
+	st.ensureMaps()
+	st.mu.RLock()
+	defer st.mu.RUnlock()
 
 	// Split by colons: fg:bg:flags
 	parts := strings.Split(content, ":")
@@ -71,6 +101,14 @@ func (st *Styler) parseStyleCodeToANSI(content string) string {
 			goto FoundFG
 		}
 
+		// A registered tint (see WithTint) overrides one of the 16 standard
+		// ANSI color names with a literal truecolor value, bypassing the
+		// plain ANSI-index code below -- checked before it so the tint wins.
+		if hex, ok := tintColorForCtx(ctx, colorName); ok {
+			codes.WriteString(colorToFGSequence(lipgloss.Color(hex)))
+			goto FoundFG
+		}
+
 		// Check st.ansiMap for standard colors (direct ANSI codes, max compatibility)
 		if code, ok := st.ansiMap[colorName]; ok {
 			codes.WriteString(code)
@@ -107,6 +145,11 @@ FoundFG:
 
 		if code, ok := st.attributeMap[colorName]; ok {
 			codes.WriteString(code)
+			goto FoundBG
+		}
+
+		if hex, ok := tintColorForCtx(ctx, colorName); ok {
+			codes.WriteString(colorToBGSequence(lipgloss.Color(hex)))
 			goto FoundBG
 		}
 
@@ -156,7 +199,9 @@ func StripANSI(text string) string {
 	return ansiRegex.ReplaceAllString(text, "")
 }
 
-// getBrightVariant attempts to get the bright variant of a color name
+// getBrightVariant attempts to get the bright variant of a color name.
+// Callers must already hold st.mu (read or write); this method takes no
+// lock itself.
 func (st *Styler) getBrightVariant(name string) (string, bool) {
 	if strings.HasPrefix(name, "bright-") {
 		return name, true

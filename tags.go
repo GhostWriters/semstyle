@@ -1,6 +1,7 @@
 package semstyle
 
 import (
+	"context"
 	"fmt"
 	"hash/fnv"
 	"regexp"
@@ -305,13 +306,21 @@ var HyperlinkModeFunc func() HyperlinkMode
 // ToANSI(s, "")     — resolves using the theme map (theme-first, console fallback), no prefix
 // ToANSI(s, "pfx")  — resolves using the theme map with a prefix qualifier
 func (st *Styler) ToANSI(s string, prefix ...string) string {
+	return st.ToANSICtx(context.Background(), s, prefix...)
+}
+
+// ToANSICtx is ToANSI, but resolves each of the 16 standard ANSI color
+// names against ctx's registered tint (see WithTint) first, substituting
+// its literal hex value where set. Falls through to ToANSI's normal
+// behavior when ctx carries no tint.
+func (st *Styler) ToANSICtx(ctx context.Context, s string, prefix ...string) string {
 	if RenderPolicy != nil && !RenderPolicy() {
 		return st.ToPlain(s)
 	}
 	s = st.processHyperlinks(s)
 	s = st.processInlineHyperlinks(s, prefix...)
 	s = st.ToTags(s, prefix...)
-	return st.processDirectTags(s)
+	return st.processDirectTagsCtx(ctx, s)
 }
 
 // ToPlain removes all semantic tags, direct tags, and ANSI escape sequences, returning
@@ -457,6 +466,13 @@ func (st *Styler) processInlineHyperlinks(text string, prefix ...string) string 
 // Inline hyperlink tags (those with a label field) are handled before this by
 // processInlineHyperlinks and are not present in the text when this runs.
 func (st *Styler) processDirectTags(text string) string {
+	return st.processDirectTagsCtx(context.Background(), text)
+}
+
+// processDirectTagsCtx is processDirectTags, threading ctx through to
+// parseStyleCodeToANSICtx so a registered tint (see WithTint) can override
+// the 16 standard ANSI color names.
+func (st *Styler) processDirectTagsCtx(ctx context.Context, text string) string {
 	re := st.directRegex
 	contentIdx := re.SubexpIndex("content")
 	return re.ReplaceAllStringFunc(text, func(match string) string {
@@ -464,7 +480,7 @@ func (st *Styler) processDirectTags(text string) string {
 		if len(subMatch) <= contentIdx {
 			return ""
 		}
-		return st.parseStyleCodeToANSI(subMatch[contentIdx])
+		return st.parseStyleCodeToANSICtx(ctx, subMatch[contentIdx])
 	})
 }
 
@@ -474,9 +490,18 @@ func (st *Styler) Sprintf(format string, a ...any) string {
 	return st.ToANSI(fmt.Sprintf(format, a...))
 }
 
+// SprintfCtx is Sprintf, but resolves each of the 16 standard ANSI color
+// names against ctx's registered tint (see WithTint) first.
+func (st *Styler) SprintfCtx(ctx context.Context, format string, a ...any) string {
+	return st.ToANSICtx(ctx, fmt.Sprintf(format, a...))
+}
+
 // --- package-level delegators to Default ---
 
 func ToANSI(s string, prefix ...string) string { return Default.ToANSI(s, prefix...) }
+func ToANSICtx(ctx context.Context, s string, prefix ...string) string {
+	return Default.ToANSICtx(ctx, s, prefix...)
+}
 func ToTags(s string, prefix ...string) string { return Default.ToTags(s, prefix...) }
 func ToPlain(s string) string                  { return Default.ToPlain(s) }
 func StripTags(s string) string                { return Default.StripTags(s) }
@@ -484,3 +509,6 @@ func ExpandTagsWithMap(text string, styleMap map[string]string, stripUnresolvabl
 	return Default.ExpandTagsWithMap(text, styleMap, stripUnresolvable, prefix)
 }
 func Sprintf(format string, a ...any) string { return Default.Sprintf(format, a...) }
+func SprintfCtx(ctx context.Context, format string, a ...any) string {
+	return Default.SprintfCtx(ctx, format, a...)
+}

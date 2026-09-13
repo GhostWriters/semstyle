@@ -7,16 +7,28 @@ import (
 // Per-Styler map state lives on the Styler struct (see styler.go). The maps are created in
 // New(); ensureMaps is a defensive guard for zero-value access.
 
-// ensureMaps ensures color maps are built if they were missed by init
+// ensureMaps ensures color maps are built if they were missed by init.
+// Takes st.mu itself -- callers must NOT already hold it.
 func (st *Styler) ensureMaps() {
+	st.mu.Lock()
+	defer st.mu.Unlock()
 	if len(st.ansiMap) == 0 {
-		st.BuildColorMap()
+		st.buildColorMapLocked()
 	}
 }
 
 // BuildColorMap initializes the ANSI code and attribute name mappings.
 // Default semantic tag registrations are handled separately by RegisterBaseTags.
+// Takes st.mu itself -- callers must NOT already hold it.
 func (st *Styler) BuildColorMap() {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.buildColorMapLocked()
+}
+
+// buildColorMapLocked is BuildColorMap's body. Callers must already hold
+// st.mu (write lock); this method takes no lock itself.
+func (st *Styler) buildColorMapLocked() {
 	if st.ansiMap == nil {
 		st.ansiMap = make(map[string]string)
 	}
@@ -610,6 +622,26 @@ func (st *Styler) GetColorDefinition(name string) string {
 	return st.WrapDirect(raw)
 }
 
+// GetConsoleColorDefinition is GetColorDefinition, but resolves strictly via
+// the console map -- for a caller resolving a nested reference found inside
+// an already console-scoped value, which must stay console-only rather than
+// falling back to GetColorDefinition's theme-first search (see ToConsoleStyle).
+func (st *Styler) GetConsoleColorDefinition(name string) string {
+	st.ensureMaps()
+	name = strings.TrimPrefix(name, "_")
+	name = strings.TrimSuffix(name, "_")
+	content := strings.ToLower(name)
+
+	st.mu.RLock()
+	raw, ok := st.consoleOnlyLookup(content)
+	st.mu.RUnlock()
+
+	if !ok || raw == "" {
+		return ""
+	}
+	return st.WrapDirect(raw)
+}
+
 // UnregisterColor removes a semantic tag from both maps
 func (st *Styler) UnregisterColor(name string) {
 	st.ensureMaps()
@@ -740,6 +772,10 @@ func RegisterSemanticTagRaw(name, rawValue string) {
 
 func GetColorDefinition(name string) string {
 	return Default.GetColorDefinition(name)
+}
+
+func GetConsoleColorDefinition(name string) string {
+	return Default.GetConsoleColorDefinition(name)
 }
 
 func UnregisterColor(name string) {

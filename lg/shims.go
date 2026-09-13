@@ -4,6 +4,7 @@ package semlg
 // semstyle/lg rather than both semstyle and semstyle/lg.
 
 import (
+	"context"
 	"image/color"
 	"regexp"
 
@@ -109,6 +110,26 @@ func SetRenderPolicy(fn func() bool) { semstyle.Default.SetRenderPolicy(fn) }
 // -- Core rendering --
 
 func ToANSI(s string, prefix ...string) string { return semstyle.ToANSI(s, prefix...) }
+func ToANSICtx(ctx context.Context, s string, prefix ...string) string {
+	return semstyle.ToANSICtx(ctx, s, prefix...)
+}
+func SprintfCtx(ctx context.Context, format string, a ...any) string {
+	return semstyle.SprintfCtx(ctx, format, a...)
+}
+
+// -- Tinting --
+
+type Palette = semstyle.Palette
+
+func RegisterTint(key string, p Palette) { semstyle.RegisterTint(key, p) }
+func UnregisterTint(key string)          { semstyle.UnregisterTint(key) }
+func SetActiveTint(key string)           { semstyle.SetActiveTint(key) }
+func ActiveTintKey() string              { return semstyle.ActiveTintKey() }
+func RunWithTint(key string, fn func())  { semstyle.RunWithTint(key, fn) }
+func BeginTint(key string) func()        { return semstyle.BeginTint(key) }
+func WithTint(ctx context.Context, key string) context.Context {
+	return semstyle.WithTint(ctx, key)
+}
 func ToTags(s string, prefix ...string) string { return semstyle.ToTags(s, prefix...) }
 func ToPlain(s string) string                  { return semstyle.ToPlain(s) }
 func StripTags(s string) string                { return semstyle.StripTags(s) }
@@ -156,7 +177,10 @@ func BuildColorMap()                        { semstyle.BuildColorMap() }
 
 // -- Color utilities --
 
-func ToColor(s string) color.Color      { return semstyle.ToColor(s) }
+func ToColor(s string) color.Color { return semstyle.ToColor(s) }
+func ToColorCtx(ctx context.Context, s string) color.Color {
+	return semstyle.ToColorCtx(ctx, s)
+}
 func ToColorStr(c color.Color) string   { return semstyle.ToColorStr(c) }
 func GetHexForColor(name string) string { return semstyle.GetHexForColor(name) }
 
@@ -164,6 +188,9 @@ func GetHexForColor(name string) string { return semstyle.GetHexForColor(name) }
 
 func GetPreferredProfile() colorprofile.Profile  { return semstyle.GetPreferredProfile() }
 func SetPreferredProfile(p colorprofile.Profile) { semstyle.SetPreferredProfile(p) }
+func RunWithProfile(p colorprofile.Profile, fn func()) {
+	semstyle.RunWithProfile(p, fn)
+}
 
 // -- Regex --
 

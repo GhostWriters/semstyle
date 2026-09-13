@@ -1,13 +1,14 @@
 package semlg
 
 import (
+	"context"
 	"fmt"
 	"image/color"
 	"regexp"
 	"strings"
 
-	"github.com/GhostWriters/semstyle"
 	"charm.land/lipgloss/v2"
+	"github.com/GhostWriters/semstyle"
 )
 
 // StyleFlags holds ANSI style modifier state parsed from a flags field.
@@ -50,21 +51,70 @@ func ResetFlags(s lipgloss.Style) lipgloss.Style {
 
 // ToStyle resolves any semantic or direct tags in text and applies the resulting
 // style to the provided lipgloss.Style, resetting to resetStyle on a reset tag.
+// No tint applied -- equivalent to ToStyleCtx(context.Background(), ...).
 func ToStyle(st *semstyle.Styler, text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
-	translated := st.ToTags(text, "")
+	return ToStyleCtx(context.Background(), st, text, style, resetStyle)
+}
+
+// ToStyleCtx is ToStyle, but resolves each of the 16 standard ANSI color
+// names via ctx's registered tint (see semstyle.WithTint) first.
+//
+// Resolves text theme-first with console fallback (via st.ToTags(text, "")
+// -- the same mode as ThemeSemanticStyle's unprefixed case). A nested
+// semantic reference found inside an already-resolved value is resolved the
+// same theme-first way, recursively. Use ToConsoleStyleCtx for strict
+// console-map-only resolution throughout (e.g. a console-only semantic tag
+// that must not be shadowed by an unrelated same-named theme tag).
+func ToStyleCtx(ctx context.Context, st *semstyle.Styler, text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
+	return toStyleCtx(ctx, st, st.ToTags(text, ""), style, resetStyle, false)
+}
+
+// ToConsoleStyle is ToStyle, but resolves strictly via the console map,
+// ignoring the theme map and SetAutoConsoleFallback -- equivalent to
+// ToConsoleStyleCtx(context.Background(), ...). Use this for a tag that must
+// always resolve from the console/base registry regardless of what theme is
+// loaded (e.g. a console log level's style) -- ToStyle's theme-mode
+// resolution would otherwise silently stop finding it the moment a theme is
+// loaded and console fallback is disabled (see SetAutoConsoleFallback),
+// even though the tag was never meant to be theme-scoped. A nested semantic
+// reference found inside an already-resolved value stays console-only too.
+func ToConsoleStyle(st *semstyle.Styler, text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
+	return ToConsoleStyleCtx(context.Background(), st, text, style, resetStyle)
+}
+
+// ToConsoleStyleCtx is ToConsoleStyle, but resolves each of the 16 standard
+// ANSI color names via ctx's registered tint (see semstyle.WithTint) first.
+func ToConsoleStyleCtx(ctx context.Context, st *semstyle.Styler, text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
+	return toStyleCtx(ctx, st, st.ToTags(text), style, resetStyle, true)
+}
+
+// toStyleCtx is the shared tag-expansion loop behind ToStyleCtx and
+// ToConsoleStyleCtx, taking translated (the caller's already-mode-selected
+// ToTags result) instead of resolving it itself. useConsole carries the
+// caller's mode into a nested semantic reference's own resolution (via
+// GetConsoleColorDefinition instead of GetColorDefinition, and recursing
+// into itself rather than back into ToStyleCtx), so a console-mode resolve
+// stays console-only end to end instead of reverting to theme-mode partway
+// through a chain.
+func toStyleCtx(ctx context.Context, st *semstyle.Styler, translated string, style lipgloss.Style, resetStyle lipgloss.Style, useConsole bool) lipgloss.Style {
 	re := st.GetDelimitedRegex()
 	for _, subMatch := range re.FindAllStringSubmatch(translated, -1) {
 		semantic := subMatch[1]
 		direct := subMatch[2]
 		if semantic != "" {
 			tagName := strings.Trim(semantic, "_")
-			def := st.GetColorDefinition(tagName)
-			style = ToStyle(st, def, style, resetStyle)
+			var translatedDef string
+			if useConsole {
+				translatedDef = st.ToTags(st.GetConsoleColorDefinition(tagName))
+			} else {
+				translatedDef = st.ToTags(st.GetColorDefinition(tagName), "")
+			}
+			style = toStyleCtx(ctx, st, translatedDef, style, resetStyle, useConsole)
 		} else if direct != "" {
 			if direct == "|" || direct == "-" {
 				style = resetStyle
 			} else {
-				style = CodeToStyle(strings.Trim(direct, "|"), style, resetStyle)
+				style = CodeToStyleCtx(ctx, strings.Trim(direct, "|"), style, resetStyle)
 			}
 		}
 	}
@@ -146,8 +196,15 @@ func withStaticPrefix(style lipgloss.Style, prefix string) lipgloss.Style {
 	})
 }
 
-// CodeToStyle applies a raw fg:bg:flags code to a lipgloss.Style.
+// CodeToStyle applies a raw fg:bg:flags code to a lipgloss.Style. No tint
+// applied -- equivalent to CodeToStyleCtx(context.Background(), ...).
 func CodeToStyle(styleCode string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
+	return CodeToStyleCtx(context.Background(), styleCode, style, resetStyle)
+}
+
+// CodeToStyleCtx is CodeToStyle, but resolves each of the 16 standard ANSI
+// color names via ctx's registered tint (see semstyle.WithTint) first.
+func CodeToStyleCtx(ctx context.Context, styleCode string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
 	if styleCode == "~" {
 		return withStaticPrefix(lipgloss.NewStyle(), hardResetFull)
 	}
@@ -169,7 +226,7 @@ func CodeToStyle(styleCode string, style lipgloss.Style, resetStyle lipgloss.Sty
 		case "-":
 			style = style.Foreground(resetStyle.GetForeground())
 		default:
-			if c := semstyle.ToColor(parts[0]); c != nil {
+			if c := semstyle.ToColorCtx(ctx, parts[0]); c != nil {
 				style = style.Foreground(c)
 			}
 		}
@@ -183,7 +240,7 @@ func CodeToStyle(styleCode string, style lipgloss.Style, resetStyle lipgloss.Sty
 		case "-":
 			style = style.Background(resetStyle.GetBackground())
 		default:
-			if c := semstyle.ToColor(parts[1]); c != nil {
+			if c := semstyle.ToColorCtx(ctx, parts[1]); c != nil {
 				style = style.Background(c)
 			}
 		}
