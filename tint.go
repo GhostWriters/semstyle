@@ -2,6 +2,9 @@ package semstyle
 
 import (
 	"context"
+	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -11,6 +14,13 @@ import (
 type Palette struct {
 	Black, Red, Green, Yellow, Blue, Magenta, Cyan, White                                                 string
 	BrightBlack, BrightRed, BrightGreen, BrightYellow, BrightBlue, BrightMagenta, BrightCyan, BrightWhite string
+
+	// The 8 base16/base24 slots with no ANSI terminal assignment. Each is
+	// empty unless a scheme/config explicitly set it; slot() derives a
+	// stand-in from the 16 fields above when empty (see slot's fallback
+	// switch), since these only ever resolve through an active Palette --
+	// there's no hex data to derive from otherwise.
+	Base01, Base02, Base04, Base06, Base09, Base0F, Base10, Base11 string
 }
 
 // slot returns the hex value registered for the given ANSI color name
@@ -52,9 +62,95 @@ func (p Palette) slot(name string) string {
 		return p.BrightCyan
 	case "bright-white", "base07":
 		return p.BrightWhite
+	case "base01":
+		if p.Base01 != "" {
+			return p.Base01
+		}
+		return blendHex(p.Black, p.BrightBlack, 0.33)
+	case "base02":
+		if p.Base02 != "" {
+			return p.Base02
+		}
+		return blendHex(p.Black, p.BrightBlack, 0.66)
+	case "base04":
+		if p.Base04 != "" {
+			return p.Base04
+		}
+		return blendHex(p.BrightBlack, p.White, 0.5)
+	case "base06":
+		if p.Base06 != "" {
+			return p.Base06
+		}
+		return blendHex(p.White, p.BrightWhite, 0.5)
+	case "base09":
+		if p.Base09 != "" {
+			return p.Base09
+		}
+		return blendHex(p.Red, p.Yellow, 0.5)
+	case "base0f":
+		if p.Base0F != "" {
+			return p.Base0F
+		}
+		return darkenHex(p.Yellow, 0.3)
+	case "base10":
+		if p.Base10 != "" {
+			return p.Base10
+		}
+		return darkenHex(p.Black, 0.5)
+	case "base11":
+		if p.Base11 != "" {
+			return p.Base11
+		}
+		return darkenHex(p.Black, 0.75)
 	default:
 		return ""
 	}
+}
+
+// blendHex mixes two "#rrggbb" hex colors, t of the way from a to b (0..1).
+// Returns "" if either input is empty or unparseable, so a Palette missing
+// the fields a fallback needs degrades to "no fallback" rather than a bogus
+// color.
+func blendHex(a, b string, t float64) string {
+	ar, ag, ab, ok1 := parseHex(a)
+	br, bg, bb, ok2 := parseHex(b)
+	if !ok1 || !ok2 {
+		return ""
+	}
+	r := int(float64(ar) + float64(br-ar)*t)
+	g := int(float64(ag) + float64(bg-ag)*t)
+	bl := int(float64(ab) + float64(bb-ab)*t)
+	return fmt.Sprintf("#%02x%02x%02x", clampByte(r), clampByte(g), clampByte(bl))
+}
+
+// darkenHex blends a hex color t of the way toward black.
+func darkenHex(a string, t float64) string {
+	if a == "" {
+		return ""
+	}
+	return blendHex(a, "#000000", t)
+}
+
+func parseHex(s string) (r, g, b int, ok bool) {
+	s = strings.TrimPrefix(s, "#")
+	if len(s) != 6 {
+		return 0, 0, 0, false
+	}
+	v, err := strconv.ParseUint(s, 16, 32)
+	if err != nil {
+		return 0, 0, 0, false
+	}
+	return int(v >> 16 & 0xff), int(v >> 8 & 0xff), int(v & 0xff), true
+}
+
+func clampByte(v int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > 255 {
+		return 255
+	}
+	return v
 }
 
 var (
