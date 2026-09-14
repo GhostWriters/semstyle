@@ -82,6 +82,27 @@ func (st *Styler) buildColorMapLocked() {
 	st.ansiMap["bright-cyan"] = CodeBrightCyan
 	st.ansiMap["bright-white"] = CodeBrightWhite
 
+	// base16/base24 slot name aliases for the 16 colors above (see
+	// ansiColorIndex's matching comment for which base0X maps to which
+	// color) -- foreground only, since "base08bg"-style background naming
+	// isn't part of either spec's conventions.
+	st.ansiMap["base00"] = CodeBlack
+	st.ansiMap["base08"] = CodeRed
+	st.ansiMap["base0b"] = CodeGreen
+	st.ansiMap["base0a"] = CodeYellow
+	st.ansiMap["base0d"] = CodeBlue
+	st.ansiMap["base0e"] = CodeMagenta
+	st.ansiMap["base0c"] = CodeCyan
+	st.ansiMap["base05"] = CodeWhite
+	st.ansiMap["base03"] = CodeBrightBlack
+	st.ansiMap["base12"] = CodeBrightRed
+	st.ansiMap["base14"] = CodeBrightGreen
+	st.ansiMap["base13"] = CodeBrightYellow
+	st.ansiMap["base16"] = CodeBrightBlue
+	st.ansiMap["base17"] = CodeBrightMagenta
+	st.ansiMap["base15"] = CodeBrightCyan
+	st.ansiMap["base07"] = CodeBrightWhite
+
 	st.ansiMap["blackbg"] = CodeBlackBg
 	st.ansiMap["redbg"] = CodeRedBg
 	st.ansiMap["greenbg"] = CodeGreenBg

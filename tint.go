@@ -15,40 +15,42 @@ type Palette struct {
 
 // slot returns the hex value registered for the given ANSI color name
 // (already lowercased, e.g. "red", "bright-red"), or "" if this palette
-// doesn't set that slot.
+// doesn't set that slot. Also accepts each name's base16/base24 slot alias
+// (see ansiColorIndex's matching comment) so a tint substitutes correctly
+// regardless of which vocabulary a tag definition used.
 func (p Palette) slot(name string) string {
 	switch name {
-	case "black":
+	case "black", "base00":
 		return p.Black
-	case "red":
+	case "red", "base08":
 		return p.Red
-	case "green":
+	case "green", "base0b":
 		return p.Green
-	case "yellow":
+	case "yellow", "base0a":
 		return p.Yellow
-	case "blue":
+	case "blue", "base0d":
 		return p.Blue
-	case "magenta":
+	case "magenta", "base0e":
 		return p.Magenta
-	case "cyan":
+	case "cyan", "base0c":
 		return p.Cyan
-	case "white":
+	case "white", "base05":
 		return p.White
-	case "bright-black":
+	case "bright-black", "base03":
 		return p.BrightBlack
-	case "bright-red":
+	case "bright-red", "base12":
 		return p.BrightRed
-	case "bright-green":
+	case "bright-green", "base14":
 		return p.BrightGreen
-	case "bright-yellow":
+	case "bright-yellow", "base13":
 		return p.BrightYellow
-	case "bright-blue":
+	case "bright-blue", "base16":
 		return p.BrightBlue
-	case "bright-magenta":
+	case "bright-magenta", "base17":
 		return p.BrightMagenta
-	case "bright-cyan":
+	case "bright-cyan", "base15":
 		return p.BrightCyan
-	case "bright-white":
+	case "bright-white", "base07":
 		return p.BrightWhite
 	default:
 		return ""
