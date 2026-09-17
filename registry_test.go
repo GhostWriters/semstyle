@@ -134,3 +134,26 @@ func TestReplaceThemeTagsKeepPredicate(t *testing.T) {
 		t.Errorf("preview_new: got %q, want %q", got, "{{[green]}}")
 	}
 }
+
+// TestReplaceThemeTagsWithPrefix verifies it matches the same keys
+// UnregisterPrefix would (case-insensitive, "_"-terminated), leaving
+// unrelated entries alone.
+func TestReplaceThemeTagsWithPrefix(t *testing.T) {
+	st := New()
+	st.RegisterThemeTagRaw("Preview_Old", "{{[red]}}")
+	st.RegisterThemeTagRaw("other", "{{[blue]}}")
+
+	st.ReplaceThemeTagsWithPrefix("Preview", func(register func(name, rawValue string)) {
+		register("Preview_New", "{{[green]}}")
+	})
+
+	if got := st.GetRawTagCode("preview_old"); got != "" {
+		t.Errorf("preview_old should have been removed: got %q", got)
+	}
+	if got := st.GetRawTagCode("other"); got != "{{[blue]}}" {
+		t.Errorf("other should have survived: got %q, want %q", got, "{{[blue]}}")
+	}
+	if got := st.GetRawTagCode("preview_new"); got != "{{[green]}}" {
+		t.Errorf("preview_new: got %q, want %q", got, "{{[green]}}")
+	}
+}

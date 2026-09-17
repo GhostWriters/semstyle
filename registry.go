@@ -676,10 +676,17 @@ func (st *Styler) UnregisterColor(name string) {
 	st.mu.Unlock()
 }
 
+// prefixSearchKey normalizes prefix into the lowercased, "_"-terminated form
+// UnregisterPrefix/ReplaceThemeTagsWithPrefix match theme/console map keys
+// against.
+func prefixSearchKey(prefix string) string {
+	return strings.ToLower(strings.TrimSuffix(prefix, "_") + "_")
+}
+
 // UnregisterPrefix removes all semantic tags that start with the given prefix from both maps
 func (st *Styler) UnregisterPrefix(prefix string) {
 	st.ensureMaps()
-	searchPrefix := strings.ToLower(strings.TrimSuffix(prefix, "_") + "_")
+	searchPrefix := prefixSearchKey(prefix)
 	st.mu.Lock()
 	for key := range st.consoleMap {
 		if strings.HasPrefix(key, searchPrefix) {
@@ -740,6 +747,16 @@ func (st *Styler) ReplaceThemeTags(keep func(key string) bool, populate func(reg
 	populate(func(name, rawValue string) {
 		st.themeMap[strings.ToLower(name)] = rawValue
 	})
+}
+
+// ReplaceThemeTagsWithPrefix is ReplaceThemeTags scoped to entries under
+// prefix (same matching rule as UnregisterPrefix) -- a convenience for the
+// common "clear this one namespace, then register its new tags" case, so a
+// caller doesn't have to reimplement UnregisterPrefix's own prefix-matching
+// rule just to build a keep predicate.
+func (st *Styler) ReplaceThemeTagsWithPrefix(prefix string, populate func(register func(name, rawValue string))) {
+	searchPrefix := prefixSearchKey(prefix)
+	st.ReplaceThemeTags(func(key string) bool { return !strings.HasPrefix(key, searchPrefix) }, populate)
 }
 
 // ResetCustomColors clears all semantic tags and rebuilds from Colors struct
@@ -847,6 +864,10 @@ func ClearThemeMap() {
 
 func ReplaceThemeTags(keep func(key string) bool, populate func(register func(name, rawValue string))) {
 	Default.ReplaceThemeTags(keep, populate)
+}
+
+func ReplaceThemeTagsWithPrefix(prefix string, populate func(register func(name, rawValue string))) {
+	Default.ReplaceThemeTagsWithPrefix(prefix, populate)
 }
 
 func ResetCustomColors() {
