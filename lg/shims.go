@@ -172,6 +172,12 @@ func GetColorDefinition(name string) string { return semstyle.GetColorDefinition
 func UnregisterColor(name string)           { semstyle.UnregisterColor(name) }
 func UnregisterPrefix(prefix string)        { semstyle.UnregisterPrefix(prefix) }
 func ClearThemeMap()                        { semstyle.ClearThemeMap() }
+func ReplaceThemeTags(keep func(key string) bool, populate func(register func(name, rawValue string))) {
+	semstyle.ReplaceThemeTags(keep, populate)
+}
+func ReplaceThemeTagsWithPrefix(prefix string, populate func(register func(name, rawValue string))) {
+	semstyle.ReplaceThemeTagsWithPrefix(prefix, populate)
+}
 func ResetCustomColors()                    { semstyle.ResetCustomColors() }
 func BuildColorMap()                        { semstyle.BuildColorMap() }
 

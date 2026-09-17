@@ -676,10 +676,17 @@ func (st *Styler) UnregisterColor(name string) {
 	st.mu.Unlock()
 }
 
+// prefixSearchKey normalizes prefix into the lowercased, "_"-terminated form
+// UnregisterPrefix/ReplaceThemeTagsWithPrefix match theme/console map keys
+// against.
+func prefixSearchKey(prefix string) string {
+	return strings.ToLower(strings.TrimSuffix(prefix, "_") + "_")
+}
+
 // UnregisterPrefix removes all semantic tags that start with the given prefix from both maps
 func (st *Styler) UnregisterPrefix(prefix string) {
 	st.ensureMaps()
-	searchPrefix := strings.ToLower(strings.TrimSuffix(prefix, "_") + "_")
+	searchPrefix := prefixSearchKey(prefix)
 	st.mu.Lock()
 	for key := range st.consoleMap {
 		if strings.HasPrefix(key, searchPrefix) {
@@ -706,6 +713,50 @@ func (st *Styler) ClearThemeMap() {
 	st.mu.Lock()
 	st.themeMap = make(map[string]string)
 	st.mu.Unlock()
+}
+
+// ReplaceThemeTags atomically removes theme-map entries and registers new
+// ones in their place, holding the write lock for both steps so no
+// concurrent reader (GetRawTagCode, ExpandTagsWithMap, etc., possibly on
+// another goroutine mid-render) can observe a state between the removal and
+// the new registrations landing -- unlike calling ClearThemeMap/
+// UnregisterPrefix followed separately by RegisterThemeTagRaw, each of
+// which only locks its own single step.
+//
+// keep, if non-nil, is consulted for every existing key (already
+// lowercased, as stored); entries it returns false for are removed before
+// populate runs. A nil keep removes every entry first (equivalent to
+// ClearThemeMap). populate is called once, synchronously, with a register
+// function that writes directly into the theme map -- populate should do
+// no slow work (I/O, parsing) itself, since the write lock is held for its
+// entire duration; do that beforehand and pass in only the already-resolved
+// key/value pairs to register.
+func (st *Styler) ReplaceThemeTags(keep func(key string) bool, populate func(register func(name, rawValue string))) {
+	st.ensureMaps()
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if keep == nil {
+		st.themeMap = make(map[string]string)
+	} else {
+		for key := range st.themeMap {
+			if !keep(key) {
+				delete(st.themeMap, key)
+			}
+		}
+	}
+	populate(func(name, rawValue string) {
+		st.themeMap[strings.ToLower(name)] = rawValue
+	})
+}
+
+// ReplaceThemeTagsWithPrefix is ReplaceThemeTags scoped to entries under
+// prefix (same matching rule as UnregisterPrefix) -- a convenience for the
+// common "clear this one namespace, then register its new tags" case, so a
+// caller doesn't have to reimplement UnregisterPrefix's own prefix-matching
+// rule just to build a keep predicate.
+func (st *Styler) ReplaceThemeTagsWithPrefix(prefix string, populate func(register func(name, rawValue string))) {
+	searchPrefix := prefixSearchKey(prefix)
+	st.ReplaceThemeTags(func(key string) bool { return !strings.HasPrefix(key, searchPrefix) }, populate)
 }
 
 // ResetCustomColors clears all semantic tags and rebuilds from Colors struct
@@ -809,6 +860,14 @@ func UnregisterPrefix(prefix string) {
 
 func ClearThemeMap() {
 	Default.ClearThemeMap()
+}
+
+func ReplaceThemeTags(keep func(key string) bool, populate func(register func(name, rawValue string))) {
+	Default.ReplaceThemeTags(keep, populate)
+}
+
+func ReplaceThemeTagsWithPrefix(prefix string, populate func(register func(name, rawValue string))) {
+	Default.ReplaceThemeTagsWithPrefix(prefix, populate)
 }
 
 func ResetCustomColors() {
