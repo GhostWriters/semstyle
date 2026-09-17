@@ -1,6 +1,7 @@
 package semstyle
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -86,5 +87,50 @@ func TestRegisterConsoleTagMultiPartFgBg(t *testing.T) {
 	want := "{{[-]}}{{[white:red]}}"
 	if got != want {
 		t.Errorf("ToTags multi-part fg+bg: got %q, want %q", got, want)
+	}
+}
+
+// TestReplaceThemeTagsNilKeepClearsFirst verifies a nil keep removes every
+// existing entry before populate runs, same as ClearThemeMap followed by
+// registration.
+func TestReplaceThemeTagsNilKeepClearsFirst(t *testing.T) {
+	st := New()
+	st.RegisterThemeTagRaw("stale", "{{[red]}}")
+
+	st.ReplaceThemeTags(nil, func(register func(name, rawValue string)) {
+		register("fresh", "{{[green]}}")
+	})
+
+	if got := st.GetRawTagCode("stale"); got != "" {
+		t.Errorf("stale tag survived a nil-keep ReplaceThemeTags: got %q, want empty", got)
+	}
+	if got := st.GetRawTagCode("fresh"); got != "{{[green]}}" {
+		t.Errorf("fresh tag: got %q, want %q", got, "{{[green]}}")
+	}
+}
+
+// TestReplaceThemeTagsKeepPredicate verifies keep is consulted per existing
+// key: entries it returns false for are removed, entries it returns true
+// for survive untouched, and populate's registrations land alongside them.
+func TestReplaceThemeTagsKeepPredicate(t *testing.T) {
+	st := New()
+	st.RegisterThemeTagRaw("preview_old", "{{[red]}}")
+	st.RegisterThemeTagRaw("other", "{{[blue]}}")
+
+	st.ReplaceThemeTags(
+		func(key string) bool { return !strings.HasPrefix(key, "preview_") },
+		func(register func(name, rawValue string)) {
+			register("preview_new", "{{[green]}}")
+		},
+	)
+
+	if got := st.GetRawTagCode("preview_old"); got != "" {
+		t.Errorf("preview_old should have been removed by keep: got %q", got)
+	}
+	if got := st.GetRawTagCode("other"); got != "{{[blue]}}" {
+		t.Errorf("other should have survived keep: got %q, want %q", got, "{{[blue]}}")
+	}
+	if got := st.GetRawTagCode("preview_new"); got != "{{[green]}}" {
+		t.Errorf("preview_new: got %q, want %q", got, "{{[green]}}")
 	}
 }
