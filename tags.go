@@ -141,18 +141,24 @@ func (st *Styler) ToTags(s string, prefix ...string) string {
 	if len(prefix) == 0 {
 		return st.ExpandTagsWithMap(s, st.consoleMap, true, "")
 	}
-	return st.ExpandTagsWithMap(s, st.themeMap, true, prefix[0])
+	return st.ExpandTagsWithMap(s, nil, true, prefix[0])
 }
 
 // ExpandTagsWithMap is the base tag-expansion routine. If styleMap is nil it uses the
-// theme map with console fallback. Expansion repeats up to 8 passes so tag values that
-// themselves reference other tags resolve correctly.
+// theme map with console fallback, resolving in the active theme prefix's namespace when
+// no prefix is given (see SetActiveThemePrefix). Expansion repeats up to 8 passes so tag
+// values that themselves reference other tags resolve correctly.
 func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, stripUnresolvable bool, prefix string) string {
 	st.ensureMaps()
 	prefix = strings.ToLower(prefix)
 
 	st.mu.RLock()
 	defer st.mu.RUnlock()
+
+	isolated := false
+	if styleMap == nil {
+		prefix, isolated = st.resolveScope(prefix)
+	}
 
 	expandOnce := func(s string, strip bool) string {
 		return st.semanticRegex.ReplaceAllStringFunc(s, func(match string) string {
@@ -168,7 +174,7 @@ func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, str
 			semanticName, modifiers, _ := strings.Cut(stripSemanticLabel(fullContent), ":")
 			content := strings.ToLower(semanticName)
 
-			rawCode, ok := st.lookupRaw(styleMap, prefix, content)
+			rawCode, ok := st.lookupRaw(styleMap, prefix, content, isolated)
 
 			if ok {
 				// If the stored value already contains delimiters it is a multi-tag
