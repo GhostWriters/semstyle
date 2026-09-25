@@ -29,6 +29,10 @@ type Styler struct {
 	// fails. False (the zero value) preserves the library's original
 	// behavior. See SetAutoConsoleFallback.
 	disableAutoConsoleFallback bool
+	// activeThemePrefix, when non-empty, is the namespace every theme-mode
+	// lookup made WITHOUT an explicit prefix resolves in -- isolated, never
+	// falling through to the unprefixed theme. See SetActiveThemePrefix.
+	activeThemePrefix string
 	// ansiMap: color/modifier names -> ANSI code.
 	ansiMap map[string]string
 	// attributeMap: non-color attribute names -> ANSI code.

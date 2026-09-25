@@ -127,6 +127,14 @@ func SetActiveTint(key string)           { semstyle.SetActiveTint(key) }
 func ActiveTintKey() string              { return semstyle.ActiveTintKey() }
 func RunWithTint(key string, fn func())  { semstyle.RunWithTint(key, fn) }
 func BeginTint(key string) func()        { return semstyle.BeginTint(key) }
+func RunWithRenderScope(tintKey, themePrefix string, fn func()) {
+	semstyle.RunWithRenderScope(tintKey, themePrefix, fn)
+}
+func BeginRenderScope(tintKey, themePrefix string) func() {
+	return semstyle.BeginRenderScope(tintKey, themePrefix)
+}
+func SetActiveThemePrefix(prefix string) { semstyle.SetActiveThemePrefix(prefix) }
+func ActiveThemePrefix() string          { return semstyle.ActiveThemePrefix() }
 func WithTint(ctx context.Context, key string) context.Context {
 	return semstyle.WithTint(ctx, key)
 }

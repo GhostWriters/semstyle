@@ -167,9 +167,11 @@ func (st *Styler) RegisterThemeTagRaw(name, rawValue string) {
 const maxFallbackDepth = 8
 
 // themeOnlyLookup resolves name against styleMap (nil means themeMap),
-// with no console-map consultation at all. Callers must already hold
-// st.mu (read or write); this method takes no lock itself.
-func (st *Styler) themeOnlyLookup(styleMap map[string]string, prefix, name string) (string, bool) {
+// with no console-map consultation at all. A prefixed lookup also checks
+// the bare name as an overlay fallback, unless isolated (see
+// SetActiveThemePrefix). Callers must already hold st.mu (read or write);
+// this method takes no lock itself.
+func (st *Styler) themeOnlyLookup(styleMap map[string]string, prefix, name string, isolated bool) (string, bool) {
 	m := styleMap
 	if m == nil {
 		m = st.themeMap
@@ -177,6 +179,9 @@ func (st *Styler) themeOnlyLookup(styleMap map[string]string, prefix, name strin
 	if prefix != "" {
 		if raw, ok := m[prefix+name]; ok {
 			return raw, true
+		}
+		if isolated {
+			return "", false
 		}
 	}
 	if raw, ok := m[name]; ok {
@@ -194,8 +199,8 @@ func (st *Styler) themeOnlyLookup(styleMap map[string]string, prefix, name strin
 // is unaffected by the toggle either way, since that's an intentional
 // per-tag opt-in rather than this automatic tier. Callers must already
 // hold st.mu (read or write); this method takes no lock itself.
-func (st *Styler) directLookup(styleMap map[string]string, prefix, name string) (string, bool) {
-	if raw, ok := st.themeOnlyLookup(styleMap, prefix, name); ok {
+func (st *Styler) directLookup(styleMap map[string]string, prefix, name string, isolated bool) (string, bool) {
+	if raw, ok := st.themeOnlyLookup(styleMap, prefix, name, isolated); ok {
 		return raw, true
 	}
 	if !st.disableAutoConsoleFallback {
@@ -244,6 +249,50 @@ func (st *Styler) SetAutoConsoleFallback(enabled bool) {
 	st.mu.Unlock()
 }
 
+// SetActiveThemePrefix makes prefix (e.g. "ct-web_", as registered via
+// RegisterInto/ReplaceThemeTagsWithPrefix) the namespace every theme-mode
+// lookup made WITHOUT an explicit prefix resolves in -- GetRawTagCode,
+// GetColorDefinition, and inline "{{|name|}}" expansion via ToTags(s, "")
+// -- so several complete themes can be registered side by side and one
+// selected per render pass. Pass "" to restore normal unprefixed lookups.
+//
+// Unlike an explicitly passed prefix (an overlay: a tag it leaves
+// undefined falls through to the unprefixed theme's own value, which is
+// what a theme preview wants), the active prefix is isolated: a tag the
+// namespace neither defines nor resolves through its own fallback rules
+// goes straight to the console tier, never borrowing a value from
+// whatever theme happens to be registered unprefixed. Console-only
+// lookups (ToTags with no prefix argument) are unaffected.
+//
+// Like SetActiveTint, this is shared by every caller of this Styler; see
+// RunWithRenderScope for swapping it safely around a render pass when
+// several sessions render concurrently.
+func (st *Styler) SetActiveThemePrefix(prefix string) {
+	st.mu.Lock()
+	st.activeThemePrefix = strings.ToLower(prefix)
+	st.mu.Unlock()
+}
+
+// ActiveThemePrefix returns the prefix set via SetActiveThemePrefix, or ""
+// if none. Useful as part of a cache key for any caller that memoizes
+// theme-mode lookups, the same way ActiveTintKey is.
+func (st *Styler) ActiveThemePrefix() string {
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	return st.activeThemePrefix
+}
+
+// resolveScope returns the prefix and isolation a theme-mode lookup should
+// use: an explicitly passed prefix as-is (overlay, not isolated), else the
+// active theme prefix (isolated) if one is set. Callers must already hold
+// st.mu (read or write).
+func (st *Styler) resolveScope(prefix string) (string, bool) {
+	if prefix == "" && st.activeThemePrefix != "" {
+		return st.activeThemePrefix, true
+	}
+	return prefix, false
+}
+
 // fallbackCandidate is one entry in a fallbackRule's candidate list.
 //   - literal: a pre-resolved raw style code (from a direct-tag-syntax
 //     argument, e.g. "{{[white:black:B]}}"), used as-is with no lookup.
@@ -278,10 +327,11 @@ type fallbackRule struct {
 // non-literal candidate with followChains=true is walked in this same loop
 // (so cycle detection covers the whole chain, e.g. A -> B -> C); anything
 // else (a literal candidate, multiple candidates, or followChains=false)
-// is resolved per-candidate instead (see the loop body for why). Callers
-// must already hold st.mu (read or write); this method takes no lock
-// itself.
-func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string) (string, bool) {
+// is resolved per-candidate instead (see the loop body for why). isolated
+// stops a prefixed lookup from falling through to the bare (unprefixed)
+// theme at any step (see SetActiveThemePrefix). Callers must already hold
+// st.mu (read or write); this method takes no lock itself.
+func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string, isolated bool) (string, bool) {
 	seen := make(map[string]bool, maxFallbackDepth)
 	for range maxFallbackDepth {
 		if seen[name] {
@@ -315,7 +365,7 @@ func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string) (st
 
 		rule, hasRule := st.fallbackMap[name]
 		if !hasRule {
-			if raw, ok := st.themeOnlyLookup(styleMap, prefix, name); ok {
+			if raw, ok := st.themeOnlyLookup(styleMap, prefix, name, isolated); ok {
 				return raw, true
 			}
 			if !st.disableAutoConsoleFallback {
@@ -350,12 +400,12 @@ func (st *Styler) lookupRaw(styleMap map[string]string, prefix, name string) (st
 				continue
 			}
 			if rule.followChains {
-				if raw, ok := st.lookupRaw(styleMap, prefix, candidate.value); ok {
+				if raw, ok := st.lookupRaw(styleMap, prefix, candidate.value, isolated); ok {
 					return mergeRawCode(raw, candidate.modifier), true
 				}
 				continue
 			}
-			if raw, ok := st.directLookup(styleMap, prefix, candidate.value); ok {
+			if raw, ok := st.directLookup(styleMap, prefix, candidate.value, isolated); ok {
 				return mergeRawCode(raw, candidate.modifier), true
 			}
 		}
@@ -587,7 +637,8 @@ func (st *Styler) GetRawTagCode(name string) string {
 	st.ensureMaps()
 	st.mu.RLock()
 	defer st.mu.RUnlock()
-	raw, _ := st.lookupRaw(nil, "", strings.ToLower(name))
+	prefix, isolated := st.resolveScope("")
+	raw, _ := st.lookupRaw(nil, prefix, strings.ToLower(name), isolated)
 	return raw
 }
 
@@ -607,7 +658,8 @@ func (st *Styler) GetRawTagCodeWithPrefix(name, prefix string) string {
 	st.ensureMaps()
 	st.mu.RLock()
 	defer st.mu.RUnlock()
-	raw, _ := st.lookupRaw(nil, strings.ToLower(prefix), strings.ToLower(name))
+	scope, isolated := st.resolveScope(strings.ToLower(prefix))
+	raw, _ := st.lookupRaw(nil, scope, strings.ToLower(name), isolated)
 	return raw
 }
 
@@ -634,7 +686,8 @@ func (st *Styler) GetColorDefinition(name string) string {
 	content := strings.ToLower(name)
 
 	st.mu.RLock()
-	raw, ok := st.lookupRaw(nil, "", content)
+	prefix, isolated := st.resolveScope("")
+	raw, ok := st.lookupRaw(nil, prefix, content, isolated)
 	st.mu.RUnlock()
 
 	if !ok || raw == "" {
@@ -832,6 +885,14 @@ func AutoConsoleFallback() bool {
 
 func SetAutoConsoleFallback(enabled bool) {
 	Default.SetAutoConsoleFallback(enabled)
+}
+
+func SetActiveThemePrefix(prefix string) {
+	Default.SetActiveThemePrefix(prefix)
+}
+
+func ActiveThemePrefix() string {
+	return Default.ActiveThemePrefix()
 }
 
 func RegisterSemanticTag(name, taggedValue string) {

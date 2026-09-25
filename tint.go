@@ -290,6 +290,36 @@ func BeginTint(key string) (restore func()) {
 	}
 }
 
+// RunWithRenderScope is RunWithTint that also makes themePrefix Default's
+// active theme prefix (see SetActiveThemePrefix) for the duration of fn,
+// restoring both afterward -- under the same single lock RunWithTint and
+// BeginTint use, so a render pass can switch tint and theme together
+// without nesting two locks. That lock isn't reentrant: code already
+// running inside a RunWithRenderScope/RunWithTint/BeginTint span must use
+// SetActiveTint/SetActiveThemePrefix directly (saving and restoring the
+// previous values itself) to switch either value for a nested part of the
+// same pass, never another Run/Begin call.
+func RunWithRenderScope(tintKey, themePrefix string, fn func()) {
+	restore := BeginRenderScope(tintKey, themePrefix)
+	defer restore()
+	fn()
+}
+
+// BeginRenderScope is RunWithRenderScope split into a begin/restore pair,
+// with the same caveats as BeginTint. Call restore exactly once.
+func BeginRenderScope(tintKey, themePrefix string) (restore func()) {
+	runWithTintMu.Lock()
+	prevTint := getActiveTintKey()
+	prevTheme := Default.ActiveThemePrefix()
+	SetActiveTint(tintKey)
+	Default.SetActiveThemePrefix(themePrefix)
+	return func() {
+		Default.SetActiveThemePrefix(prevTheme)
+		SetActiveTint(prevTint)
+		runWithTintMu.Unlock()
+	}
+}
+
 // tintColorForCtx returns the literal hex value the applicable tint (ctx's,
 // if it carries one via WithTint, else the process-wide active tint set via
 // SetActiveTint) sets for colorName (already lowercased), and whether one
