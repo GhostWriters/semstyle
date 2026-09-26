@@ -54,3 +54,30 @@ func TestUntintedSlotsWithoutANSIAssignment(t *testing.T) {
 		}
 	}
 }
+
+func TestDarkerBackgroundsFollowVariant(t *testing.T) {
+	dark := Palette{Black: "#202020", White: "#d0d0d0"}
+	light := Palette{Black: "#e0e0e0", White: "#303030"}
+	tests := []struct {
+		name string
+		p    Palette
+		want string // base10's direction from Black
+	}{
+		{"inferred dark", dark, "darker"},
+		{"inferred light", light, "lighter"},
+		{"declared light", Palette{Black: "#202020", White: "#d0d0d0", Variant: "light"}, "lighter"},
+		{"declared dark", Palette{Black: "#e0e0e0", White: "#303030", Variant: "dark"}, "darker"},
+	}
+	for _, tt := range tests {
+		for _, slot := range []string{"base10", "base11"} {
+			got := luminance(tt.p.slot(slot))
+			bg := luminance(tt.p.Black)
+			if (tt.want == "darker") != (got < bg) {
+				t.Errorf("%s: %s = %s, want %s than %s", tt.name, slot, tt.p.slot(slot), tt.want, tt.p.Black)
+			}
+		}
+		if b10, b11 := luminance(tt.p.slot("base10")), luminance(tt.p.slot("base11")); (tt.want == "darker") != (b11 < b10) {
+			t.Errorf("%s: base11 should be further from the background than base10", tt.name)
+		}
+	}
+}

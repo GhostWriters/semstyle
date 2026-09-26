@@ -21,6 +21,33 @@ type Palette struct {
 	// switch), since these only ever resolve through an active Palette --
 	// there's no hex data to derive from otherwise.
 	Base01, Base02, Base04, Base06, Base09, Base0F, Base10, Base11 string
+
+	// Variant is the scheme's "dark" or "light"; empty infers it from Black
+	// and White's brightness (see light). It decides which way the
+	// Base10/Base11 stand-ins go from the background.
+	Variant string
+}
+
+// light reports whether p is a light scheme: its Variant, else whether
+// Black (the background) is brighter than White (the text).
+func (p Palette) light() bool {
+	switch strings.ToLower(p.Variant) {
+	case "light":
+		return true
+	case "dark":
+		return false
+	}
+	return luminance(p.Black) > luminance(p.White)
+}
+
+// beyondBackground blends the background (Black) t of the way away from the
+// text: toward black for a dark scheme, toward white for a light one, as
+// base24 orders base10/base11 beyond base00.
+func (p Palette) beyondBackground(t float64) string {
+	if p.light() {
+		return blendHex(p.Black, "#ffffff", t)
+	}
+	return darkenHex(p.Black, t)
 }
 
 // slot returns the hex value registered for the given ANSI color name
@@ -96,12 +123,12 @@ func (p Palette) slot(name string) string {
 		if p.Base10 != "" {
 			return p.Base10
 		}
-		return darkenHex(p.Black, 0.5)
+		return p.beyondBackground(0.5)
 	case "base11":
 		if p.Base11 != "" {
 			return p.Base11
 		}
-		return darkenHex(p.Black, 0.75)
+		return p.beyondBackground(0.75)
 	default:
 		return ""
 	}
@@ -129,6 +156,16 @@ func darkenHex(a string, t float64) string {
 		return ""
 	}
 	return blendHex(a, "#000000", t)
+}
+
+// luminance returns hex's relative brightness (0-255), or -1 if it isn't a
+// hex color.
+func luminance(hex string) float64 {
+	r, g, b, ok := parseHex(hex)
+	if !ok {
+		return -1
+	}
+	return 0.2126*float64(r) + 0.7152*float64(g) + 0.0722*float64(b)
 }
 
 func parseHex(s string) (r, g, b int, ok bool) {
