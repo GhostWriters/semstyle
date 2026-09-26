@@ -84,8 +84,7 @@ func (st *Styler) buildColorMapLocked() {
 
 	// base16/base24 slot name aliases for the 16 colors above (see
 	// ansiColorIndex's matching comment for which base0X maps to which
-	// color) -- foreground only, since "base08bg"-style background naming
-	// isn't part of either spec's conventions.
+	// color); their background codes are registered below.
 	st.ansiMap["base00"] = CodeBlack
 	st.ansiMap["base08"] = CodeRed
 	st.ansiMap["base0b"] = CodeGreen
@@ -119,6 +118,32 @@ func (st *Styler) buildColorMapLocked() {
 	st.ansiMap["bright-magentabg"] = CodeBrightMagentaBg
 	st.ansiMap["bright-cyanbg"] = CodeBrightCyanBg
 	st.ansiMap["bright-whitebg"] = CodeBrightWhiteBg
+
+	// Background codes for the slot name aliases above, looked up as the
+	// slot name plus "bg" like the color names.
+	st.ansiMap["base00bg"] = CodeBlackBg
+	st.ansiMap["base08bg"] = CodeRedBg
+	st.ansiMap["base0bbg"] = CodeGreenBg
+	st.ansiMap["base0abg"] = CodeYellowBg
+	st.ansiMap["base0dbg"] = CodeBlueBg
+	st.ansiMap["base0ebg"] = CodeMagentaBg
+	st.ansiMap["base0cbg"] = CodeCyanBg
+	st.ansiMap["base05bg"] = CodeWhiteBg
+	st.ansiMap["base03bg"] = CodeBrightBlackBg
+	st.ansiMap["base12bg"] = CodeBrightRedBg
+	st.ansiMap["base14bg"] = CodeBrightGreenBg
+	st.ansiMap["base13bg"] = CodeBrightYellowBg
+	st.ansiMap["base16bg"] = CodeBrightBlueBg
+	st.ansiMap["base17bg"] = CodeBrightMagentaBg
+	st.ansiMap["base15bg"] = CodeBrightCyanBg
+	st.ansiMap["base07bg"] = CodeBrightWhiteBg
+
+	// The slots with no ANSI assignment, as their stand-in (see
+	// slotANSIFallback).
+	for slot, name := range slotANSIFallback {
+		st.ansiMap[slot] = st.ansiMap[name]
+		st.ansiMap[slot+"bg"] = st.ansiMap[name+"bg"]
+	}
 
 }
 
