@@ -808,7 +808,8 @@ func (st *Styler) ClearThemeMap() {
 // function that writes directly into the theme map -- populate should do
 // no slow work (I/O, parsing) itself, since the write lock is held for its
 // entire duration; do that beforehand and pass in only the already-resolved
-// key/value pairs to register.
+// key/value pairs to register. Neither keep nor populate may call st's
+// methods: the lock is held while they run, so that deadlocks.
 func (st *Styler) ReplaceThemeTags(keep func(key string) bool, populate func(register func(name, rawValue string))) {
 	st.ensureMaps()
 	st.mu.Lock()

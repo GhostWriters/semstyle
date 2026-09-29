@@ -67,6 +67,7 @@ func TestDarkerBackgroundsFollowVariant(t *testing.T) {
 		{"inferred light", light, "lighter"},
 		{"declared light", Palette{Black: "#202020", White: "#d0d0d0", Variant: "light"}, "lighter"},
 		{"declared dark", Palette{Black: "#e0e0e0", White: "#303030", Variant: "dark"}, "darker"},
+		{"no White is dark", Palette{Black: "#808080"}, "darker"},
 	}
 	for _, tt := range tests {
 		for _, slot := range []string{"base10", "base11"} {
