@@ -6,6 +6,7 @@ package semtheme
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/GhostWriters/semstyle"
@@ -24,6 +25,12 @@ type ThemeFile struct {
 		Name        string `toml:"name"`
 		Description string `toml:"description"`
 		Author      string `toml:"author"`
+		// Variant is optional: VariantDark, VariantLight, or VariantTinted
+		// (see ThemeFile.Variant).
+		Variant string `toml:"variant"`
+		// Colors are optional: the theme's base colors, as color names or
+		// $palette names (see ThemeFile.ColorInfo).
+		Colors []string `toml:"colors"`
 	} `toml:"metadata"`
 	Syntax *struct {
 		SemanticPrefix string `toml:"semantic_prefix"`
@@ -34,6 +41,131 @@ type ThemeFile struct {
 	Defaults map[string]any    `toml:"defaults"`
 	Palette  map[string]string `toml:"palette"`
 	Styles   map[string]string `toml:"styles"`
+}
+
+// A theme's variant: whether it's drawn dark or light, or takes its colors
+// from a tint (see semstyle.WithTint), which then decides dark or light.
+const (
+	VariantDark   = "dark"
+	VariantLight  = "light"
+	VariantTinted = "tinted"
+)
+
+// Variant returns the theme's variant: [metadata] variant when it's one of
+// VariantDark, VariantLight, or VariantTinted (any case), otherwise
+// VariantTinted, with detected true, when UsesTintSlots, otherwise "".
+func (tf ThemeFile) Variant() (variant string, detected bool) {
+	switch v := strings.ToLower(strings.TrimSpace(tf.Metadata.Variant)); v {
+	case VariantDark, VariantLight, VariantTinted:
+		return v, false
+	}
+	if tf.UsesTintSlots() {
+		return VariantTinted, true
+	}
+	return "", false
+}
+
+// UsesTintSlots reports whether any [palette] or [styles] value names a
+// base16/base24 slot (see semstyle.IsTintSlot), the colors a tint sets.
+func (tf ThemeFile) UsesTintSlots() bool {
+	notName := func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9')
+	}
+	for _, values := range []map[string]string{tf.Palette, tf.Styles} {
+		for _, v := range values {
+			for _, word := range strings.FieldsFunc(v, notName) {
+				if semstyle.IsTintSlot(word) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// Kinds of theme colors (see ThemeFile.ColorInfo).
+const (
+	ColorsMonochrome     = "monochrome"
+	ColorsSemiMonochrome = "semi-monochrome"
+	ColorsMultiColor     = "multi-color"
+	ColorsTinted         = "tinted"
+)
+
+// ColorInfo describes a theme's colors (see ThemeFile.ColorInfo).
+type ColorInfo struct {
+	// Colors are [metadata] colors, $palette names resolved.
+	Colors []string
+	// Kind is ColorsMonochrome, ColorsSemiMonochrome, ColorsMultiColor, or
+	// ColorsTinted; "" when the theme declares no colors.
+	Kind string
+	// Extra are the color families (see semstyle.ColorFamily) its styles
+	// use beyond Colors', sorted; set for ColorsSemiMonochrome.
+	Extra []string
+}
+
+// ColorInfo returns the theme's [metadata] colors and their kind: tinted
+// when one is a tint slot (see semstyle.IsTintSlot), multi-color when they
+// span two or more color families (see semstyle.ColorFamily; black, white,
+// and grays are none), otherwise monochrome, or semi-monochrome when its
+// styles use other color families too.
+func (tf ThemeFile) ColorInfo() ColorInfo {
+	var info ColorInfo
+	for _, c := range tf.Metadata.Colors {
+		info.Colors = append(info.Colors, resolvePaletteRef(c, tf.Palette))
+	}
+	if len(info.Colors) == 0 {
+		return info
+	}
+	base := map[string]bool{}
+	for _, c := range info.Colors {
+		if semstyle.IsTintSlot(c) {
+			info.Kind = ColorsTinted
+			return info
+		}
+		if family, ok := semstyle.ColorFamily(c); ok && family != "" {
+			base[family] = true
+		}
+	}
+	if len(base) > 1 {
+		info.Kind = ColorsMultiColor
+		return info
+	}
+	if resolved, err := ResolveColors(tf); err == nil {
+		seen := map[string]bool{}
+		for _, v := range resolved {
+			// fg:bg:flags
+			parts := strings.SplitN(v, ":", 3)
+			for _, c := range parts[:min(2, len(parts))] {
+				if family, ok := semstyle.ColorFamily(c); ok && family != "" && !base[family] && !seen[family] {
+					seen[family] = true
+					info.Extra = append(info.Extra, family)
+				}
+			}
+		}
+		sort.Strings(info.Extra)
+	}
+	info.Kind = ColorsMonochrome
+	if len(info.Extra) > 0 {
+		info.Kind = ColorsSemiMonochrome
+	}
+	return info
+}
+
+// resolvePaletteRef follows a $name through palette, including a palette
+// value that's itself a $name; left as-is when palette doesn't define it.
+func resolvePaletteRef(v string, palette map[string]string) string {
+	for range 10 {
+		name, ok := strings.CutPrefix(strings.TrimSpace(v), "$")
+		if !ok {
+			return v
+		}
+		next, ok := palette[name]
+		if !ok {
+			return v
+		}
+		v = next
+	}
+	return v
 }
 
 // PrefixTag joins an optional namespace prefix with a tag name. With no prefix the name

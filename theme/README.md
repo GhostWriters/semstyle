@@ -21,6 +21,8 @@ custom delimiters, and optional UI defaults:
 name        = "Midnight"
 description = "Dark theme"
 author      = "you"
+variant     = "dark"               # optional: "dark", "light", or "tinted"
+colors      = ["$accent", "$bg"]   # optional: base colors, as names or $palette names
 
 [palette]
 accent = "#7aa2f7"
@@ -76,6 +78,13 @@ s.SetThemeMap(styles)
 
 - **`ThemeFile`** — the parsed theme: metadata, optional `[syntax]` delimiters, `[palette]`,
   `[styles]`, and `Defaults` (the opaque `[defaults]` table as `map[string]any`).
+  `Variant()` returns its `[metadata] variant` (`dark`, `light`, or `tinted`), or detects
+  `tinted` when its palette or styles name a base16/base24 slot (`base00`–`base17`), the
+  colors a tint sets.
+  `ColorInfo()` returns its `[metadata] colors` (`$palette` names resolved) and their kind:
+  `monochrome` (one color family at most, counting bright and normal forms as one and black,
+  white, and grays as none), `semi-monochrome` (monochrome colors, but its styles use other
+  families too, listed in `Extra`), `multi-color`, or `tinted` (a color is a tint slot).
 
 `semtheme` intentionally does **not** define a typed defaults struct. The `[defaults]` table
 is app-specific UI vocabulary (borders, panels, …), so it's passed through untyped; the
