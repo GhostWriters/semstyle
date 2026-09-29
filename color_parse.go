@@ -171,8 +171,8 @@ func ToColor(c string) color.Color {
 // eight with no ANSI index (base01/02/04/06/09/0F/10/11) -- checks ctx's
 // registered tint (see WithTint) first, substituting its literal hex value.
 // Falls through to the untinted behavior when ctx carries no tint, or the
-// tint doesn't set that slot; the eight slots with no ANSI index resolve to
-// nothing without one.
+// tint doesn't set that slot; the eight slots with no ANSI index resolve,
+// without one, to the ANSI color they're a variant of (see slotANSIFallback).
 func ToColorCtx(ctx context.Context, c string) color.Color {
 	c = strings.ToLower(strings.TrimSpace(c))
 

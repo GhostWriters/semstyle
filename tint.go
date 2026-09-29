@@ -29,7 +29,8 @@ type Palette struct {
 }
 
 // light reports whether p is a light scheme: its Variant, else whether
-// Black (the background) is brighter than White (the text).
+// Black (the background) is brighter than White (the text); dark when
+// either isn't a valid color.
 func (p Palette) light() bool {
 	switch strings.ToLower(p.Variant) {
 	case "light":
@@ -37,7 +38,8 @@ func (p Palette) light() bool {
 	case "dark":
 		return false
 	}
-	return luminance(p.Black) > luminance(p.White)
+	black, white := luminance(p.Black), luminance(p.White)
+	return black >= 0 && white >= 0 && black > white
 }
 
 // beyondBackground blends the background (Black) t of the way away from the
