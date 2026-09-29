@@ -13,6 +13,7 @@ func TestVariant(t *testing.T) {
 		{"declared wins over slots", "[metadata]\nvariant = \"dark\"\n[palette]\nbg = \"base00\"\n", VariantDark, false},
 		{"palette slot", "[palette]\nbg = \"base00\"\n", VariantTinted, true},
 		{"style slot", "[styles]\nTitle = \"{{[BASE0D:-:B]}}\"\n", VariantTinted, true},
+		{"slot behind palette chain", "[palette]\nprimary = \"$foreground\"\nforeground = \"base05\"\n[styles]\nTitle = \"{{[$primary:-]}}\"\n", VariantTinted, true},
 		{"unknown value, no slots", "[metadata]\nvariant = \"dim\"\n[styles]\nTitle = \"{{[blue:black]}}\"\n", "", false},
 		{"slot-like names aren't slots", "[palette]\nbase = \"blue\"\nbase18 = \"red\"\n", "", false},
 		{"none", "[styles]\nTitle = \"{{[blue:black]}}\"\n", "", false},
