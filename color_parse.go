@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"image/color"
+	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -83,6 +84,80 @@ var slotANSIFallback = map[string]string{
 	"base0f": "yellow",
 	"base10": "black",
 	"base11": "black",
+}
+
+// IsTintSlot reports whether name (any case) is a base16/base24 slot name,
+// base00 through base17 -- a color a tint sets.
+func IsTintSlot(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	_, ok := ansiColorIndex[name]
+	return ok && strings.HasPrefix(name, "base")
+}
+
+// BasicColors are the 8 basic ANSI colors, in index order (see BasicColor).
+var BasicColors = [8]string{"black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"}
+
+// ColorFamily returns the basic color c (a name, ANSI index, or hex) belongs
+// to -- "red", "yellow", "green", "cyan", "blue", or "magenta", its bright
+// and normal forms alike -- or "" with ok true for a neutral: black, white,
+// or a gray. ok is false when c names no color ("", "-") or is a tint slot,
+// whose color comes from a tint (see IsTintSlot).
+func ColorFamily(c string) (family string, ok bool) {
+	basic, ok := BasicColor(c)
+	if basic == "black" || basic == "white" {
+		return "", ok
+	}
+	return basic, ok
+}
+
+// BasicColor returns which of BasicColors c (a name, ANSI index, or hex) is
+// -- its bright and normal forms alike, a gray counting as black or white by
+// how bright it is. ok is false as for ColorFamily.
+func BasicColor(c string) (basic string, ok bool) {
+	c = strings.ToLower(strings.TrimSpace(c))
+	if c == "" || c == "-" || IsTintSlot(c) {
+		return "", false
+	}
+	idx, isIndex := ansiColorIndex[c]
+	if !isIndex {
+		if n, err := strconv.Atoi(c); err == nil && n >= 0 && n < 16 {
+			idx, isIndex = c, true
+		}
+	}
+	if isIndex {
+		n, _ := strconv.Atoi(idx)
+		return BasicColors[n%8], true
+	}
+	col := ToColor(c)
+	if col == nil {
+		return "", false
+	}
+	r, g, b, a := col.RGBA()
+	if a == 0 {
+		return "", false
+	}
+	hi, lo := max(r, g, b), min(r, g, b)
+	// Too dark or too washed out to read as a color.
+	if hi < 0x3333 || float64(hi-lo)/float64(hi) < 0.25 {
+		if hi < 0x8000 {
+			return "black", true
+		}
+		return "white", true
+	}
+	var hue float64
+	d := float64(hi - lo)
+	switch hi {
+	case r:
+		hue = 60 * (float64(g) - float64(b)) / d
+	case g:
+		hue = 60*(float64(b)-float64(r))/d + 120
+	default:
+		hue = 60*(float64(r)-float64(g))/d + 240
+	}
+	if hue < 0 {
+		hue += 360
+	}
+	return [6]string{"red", "yellow", "green", "cyan", "blue", "magenta"}[int((hue+30)/60)%6], true
 }
 
 // ToColor converts a color name or hex string to a color.Color, with no

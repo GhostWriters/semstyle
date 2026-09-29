@@ -9,7 +9,9 @@
 //
 // A theme is a TOML file with four sections:
 //
-//   - [metadata] — name, description, author.
+//   - [metadata] — name, description, author, an optional variant: dark,
+//     light, or tinted (see [ThemeFile.Variant]), and optional base colors
+//     (see [ThemeFile.ColorInfo]).
 //   - [palette] — reusable color variables referenced as $name in style values.
 //   - [styles] — semantic name → style value. Values may use direct tags
 //     ({{[fg:bg:flags]}}), reference palette variables ($name), or reference
