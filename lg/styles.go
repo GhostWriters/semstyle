@@ -34,14 +34,28 @@ func (f StyleFlags) Apply(s lipgloss.Style) lipgloss.Style {
 		Reverse(f.Reverse).
 		Strikethrough(f.Strikethrough)
 	if f.HighIntensity {
-		if fg := s.GetForeground(); fg != nil {
-			s = s.Foreground(brightenColor(fg))
-		}
-		if bg := s.GetBackground(); bg != nil {
-			s = s.Background(brightenColor(bg))
-		}
+		s = brightenStyle(s)
 	}
 	return s
+}
+
+// brightenStyle brightens s's foreground and background, leaving either
+// alone when s doesn't set it.
+func brightenStyle(s lipgloss.Style) lipgloss.Style {
+	if fg := s.GetForeground(); colorSet(fg) {
+		s = s.Foreground(brightenColor(fg))
+	}
+	if bg := s.GetBackground(); colorSet(bg) {
+		s = s.Background(brightenColor(bg))
+	}
+	return s
+}
+
+// colorSet reports whether c is a color a style sets: lipgloss returns
+// NoColor, not nil, for an unset one.
+func colorSet(c color.Color) bool {
+	_, unset := c.(lipgloss.NoColor)
+	return c != nil && !unset
 }
 
 // ResetFlags clears all text attributes from a style.
@@ -279,12 +293,7 @@ func CodeToStyleCtx(ctx context.Context, styleCode string, style lipgloss.Style,
 			case 's':
 				style = style.Strikethrough(false)
 			case 'H':
-				if fg := style.GetForeground(); fg != nil {
-					style = style.Foreground(brightenColor(fg))
-				}
-				if bg := style.GetBackground(); bg != nil {
-					style = style.Background(brightenColor(bg))
-				}
+				style = brightenStyle(style)
 			}
 		}
 	}
