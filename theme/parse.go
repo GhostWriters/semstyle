@@ -69,7 +69,7 @@ func (tf ThemeFile) Variant() (variant string, detected bool) {
 // base16/base24 slot (see semstyle.IsTintSlot), the colors a tint sets.
 func (tf ThemeFile) UsesTintSlots() bool {
 	notName := func(r rune) bool {
-		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9')
+		return (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9')
 	}
 	for _, values := range []map[string]string{tf.Palette, tf.Styles} {
 		for _, v := range values {
@@ -228,9 +228,10 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 		default:
 			inner = semstyle.StripDelimiters(inner)
 		}
-		if inner == "-" {
+		switch inner {
+		case "-":
 			inner = "-:-:-"
-		} else if inner == "~" {
+		case "~":
 			// Hard reset, per field: CodeToStyle's exact "~" fast path never
 			// sees this once expanded (it only matches a lone, un-suffixed
 			// "~"), but the field-level "~" case it also implements

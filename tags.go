@@ -468,16 +468,12 @@ func (st *Styler) processInlineHyperlinks(text string, prefix ...string) string 
 	return out.String()
 }
 
-// processDirectTags converts remaining direct tags {{[code]}} to ANSI sequences.
-// Inline hyperlink tags (those with a label field) are handled before this by
-// processInlineHyperlinks and are not present in the text when this runs.
-func (st *Styler) processDirectTags(text string) string {
-	return st.processDirectTagsCtx(context.Background(), text)
-}
-
-// processDirectTagsCtx is processDirectTags, threading ctx through to
-// parseStyleCodeToANSICtx so a registered tint (see WithTint) can override
-// the 16 standard ANSI color names.
+// processDirectTagsCtx converts remaining direct tags {{[code]}} to ANSI
+// sequences, threading ctx through to parseStyleCodeToANSICtx so a
+// registered tint (see WithTint) can override the 16 standard ANSI color
+// names. Inline hyperlink tags (those with a label field) are handled
+// before this by processInlineHyperlinks and are not present in the text
+// when this runs.
 func (st *Styler) processDirectTagsCtx(ctx context.Context, text string) string {
 	re := st.directRegex
 	contentIdx := re.SubexpIndex("content")
