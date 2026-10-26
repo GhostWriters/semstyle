@@ -381,6 +381,9 @@ func brightenColor(c color.Color) color.Color {
 	if c == nil {
 		return c
 	}
+	if bright, ok := semstyle.BrightPlaceholder(c); ok {
+		return bright
+	}
 	rr, gg, bb, _ := c.RGBA()
 	r := int(rr >> 8)
 	g := int(gg >> 8)

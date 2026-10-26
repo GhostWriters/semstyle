@@ -101,6 +101,13 @@ func (st *Styler) parseStyleCodeToANSICtx(ctx context.Context, content string) s
 			goto FoundFG
 		}
 
+		// With deferred tints on, a color a tint can set renders as a
+		// placeholder for ResolveTints to fill in (see SetDeferTints).
+		if hex, ok := deferredColor(tintKeyForCtx(ctx), colorName); ok {
+			codes.WriteString(colorToFGSequence(lipgloss.Color(hex)))
+			goto FoundFG
+		}
+
 		// A registered tint (see WithTint) overrides one of the 16 standard
 		// ANSI color names with a literal truecolor value, bypassing the
 		// plain ANSI-index code below -- checked before it so the tint wins.
@@ -117,13 +124,13 @@ func (st *Styler) parseStyleCodeToANSICtx(ctx context.Context, content string) s
 
 		// Extended color: resolve via tcell → hex → lipgloss
 		if strings.HasPrefix(colorName, "#") {
-			codes.WriteString(colorToFGSequence(lipgloss.Color(colorName)))
+			codes.WriteString(colorToFGSequence(lipgloss.Color(avoidPlaceholder(colorName))))
 		} else {
 			tc := ResolveTcellColor(colorName)
 			if tc != tcellColor.Default {
 				hexVal := tc.Hex()
 				if hexVal >= 0 {
-					codes.WriteString(colorToFGSequence(lipgloss.Color(fmt.Sprintf("#%06x", hexVal))))
+					codes.WriteString(colorToFGSequence(lipgloss.Color(avoidPlaceholder(fmt.Sprintf("#%06x", hexVal)))))
 				}
 			}
 		}
@@ -148,6 +155,11 @@ FoundFG:
 			goto FoundBG
 		}
 
+		if hex, ok := deferredColor(tintKeyForCtx(ctx), colorName); ok {
+			codes.WriteString(colorToBGSequence(lipgloss.Color(hex)))
+			goto FoundBG
+		}
+
 		if hex, ok := tintColorForCtx(ctx, colorName); ok {
 			codes.WriteString(colorToBGSequence(lipgloss.Color(hex)))
 			goto FoundBG
@@ -159,13 +171,13 @@ FoundFG:
 		}
 
 		if strings.HasPrefix(colorName, "#") {
-			codes.WriteString(colorToBGSequence(lipgloss.Color(colorName)))
+			codes.WriteString(colorToBGSequence(lipgloss.Color(avoidPlaceholder(colorName))))
 		} else {
 			tc := ResolveTcellColor(colorName)
 			if tc != tcellColor.Default {
 				hexVal := tc.Hex()
 				if hexVal >= 0 {
-					codes.WriteString(colorToBGSequence(lipgloss.Color(fmt.Sprintf("#%06x", hexVal))))
+					codes.WriteString(colorToBGSequence(lipgloss.Color(avoidPlaceholder(fmt.Sprintf("#%06x", hexVal)))))
 				}
 			}
 		}

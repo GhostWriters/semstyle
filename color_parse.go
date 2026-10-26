@@ -177,7 +177,10 @@ func ToColorCtx(ctx context.Context, c string) color.Color {
 	c = strings.ToLower(strings.TrimSpace(c))
 
 	if strings.HasPrefix(c, "#") {
-		return lipgloss.Color(c)
+		return lipgloss.Color(avoidPlaceholder(c))
+	}
+	if hex, ok := deferredColor(tintKeyForCtx(ctx), c); ok {
+		return lipgloss.Color(hex)
 	}
 	if hex, ok := tintColorForCtx(ctx, c); ok {
 		return lipgloss.Color(hex)

@@ -251,6 +251,13 @@ bare string that way.
 | `ResolveFallbackViaLookup(name, lookup)` | Resolve `name`'s registered fallback rule against a caller-supplied `lookup` instead of this Styler's own maps — for a theme-file parser resolving inline tag references against its own raw values |
 | `SetThemeMap(m)` | Replace the theme map wholesale |
 | `SetRenderPolicy(fn)` | Gate rendering (return false → `ToPlain` instead of color) |
+| `RegisterTint(key, p)` / `UnregisterTint(key)` | Register or remove a named tint palette |
+| `SetActiveTint(key)` / `RunWithTint(key, fn)` / `BeginTint(key)` | Make a tint active process-wide, or for one render pass |
+| `WithTint(ctx, key)` | Carry a tint key in a context for the `…Ctx` functions |
+| `SetDeferTints(on)` / `DeferTints()` | Render tintable colors as placeholders (see [Deferred tints](#deferred-tints)) |
+| `ResolveTints(s, defaultKey)` | Replace placeholders in finished output with current tint colors |
+| `ResolveColor(c)` / `ResolveColorWithDefault(c, defaultKey)` | A placeholder's current real color, for color math; a keyless placeholder resolves with the active tint key, or `defaultKey` |
+| `BrightPlaceholder(c)` | A placeholder's bright-slot form |
 | `New()` | Create an independent `*Styler` |
 | `(*Styler).SetDelimiters(…)` | Customize this Styler's tag delimiters |
 | `(*Styler).RegisterHyperlinkTag(name)` | Make a tag render its content as a terminal hyperlink |
@@ -340,6 +347,47 @@ semstyle.SetRenderPolicy(func() bool { return isTerminal() })
 ```
 
 When the policy returns false, `ToANSI` strips instead of rendering.
+
+## Tints
+
+A tint replaces the 16 standard ANSI colors (and the base16/base24 slot names) with literal
+colors from a palette, instead of the plain ANSI codes those names otherwise render as:
+
+```go
+semstyle.RegisterTint("dracula", semstyle.Palette{Cyan: "#8be9fd", Red: "#ff5555"})
+semstyle.RunWithTint("dracula", func() {
+    fmt.Println(semstyle.ToANSI("{{[cyan]}}tinted{{[-]}}"))
+})
+```
+
+`SetActiveTint` sets the process-wide tint, `RunWithTint`/`BeginTint` set it for one render
+pass under a lock, and `WithTint` carries a key in a `context.Context` for the `…Ctx`
+functions. A slot the palette leaves empty renders as its plain ANSI color.
+
+### Deferred tints
+
+Text rendered with a tint keeps that tint's colors, so text a program renders once and keeps
+(a cache, a scrollback buffer) goes stale when the tint changes. Deferred tints avoid that:
+with `SetDeferTints(true)`, each color a tint can set renders as a placeholder naming the
+active tint key and the slot. `ResolveTints` then swaps each placeholder in the finished
+output for that key's current color, or the plain ANSI color when the key has no tint:
+
+```go
+semstyle.SetDeferTints(true)
+line := semstyle.ToANSI("{{[cyan]}}kept{{[-]}}")   // placeholders; safe to keep
+// ...later, for each frame:
+frame := semstyle.ResolveTints(line, "dracula")    // the tint as it is now
+```
+
+Each region keeps the key that was active when it rendered, so one frame can mix tints.
+Placeholders without a key resolve with `ResolveTints`' default key. Turn deferral on only
+for output that passes through `ResolveTints` before it reaches a terminal.
+
+A placeholder is a truecolor value with red `0x01`; while deferral is on, a literal color in
+that range is nudged by one step so it can't be mistaken for one. Code that needs a color's
+real values (contrast, blending) calls `ResolveColor` first, or `ResolveColorWithDefault` with
+the same default key it passes to `ResolveTints`. Each `ResolveTints` call reads each tint
+once, so a tint changing mid-call can't mix old and new colors in one string.
 
 ## Theming
 
