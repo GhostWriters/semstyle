@@ -256,6 +256,7 @@ bare string that way.
 | `WithTint(ctx, key)` | Carry a tint key in a context for the `…Ctx` functions |
 | `SetDeferTints(on)` / `DeferTints()` | Render tintable colors as placeholders (see [Deferred tints](#deferred-tints)) |
 | `ResolveTints(s, defaultKey)` | Replace placeholders in finished output with current tint colors |
+| `ReleaseTintKey(key)` | Unregister a tint key that won't be used again and free its placeholder ID |
 | `ResolveColor(c)` / `ResolveColorWithDefault(c, defaultKey)` | A placeholder's current real color, for color math; a keyless placeholder resolves with the active tint key, or `defaultKey` |
 | `BrightPlaceholder(c)` | A placeholder's bright-slot form |
 | `New()` | Create an independent `*Styler` |
@@ -380,6 +381,8 @@ frame := semstyle.ResolveTints(line, "dracula")    // the tint as it is now
 ```
 
 Each region keeps the key that was active when it rendered, so one frame can mix tints.
+Up to 64 tint keys (counting the empty one) can have placeholders at once; call
+`ReleaseTintKey` for a key that's done for good (a closed preview, say) to free its slot.
 Placeholders without a key resolve with `ResolveTints`' default key. Turn deferral on only
 for output that passes through `ResolveTints` before it reaches a terminal.
 

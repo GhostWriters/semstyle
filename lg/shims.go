@@ -138,6 +138,7 @@ func ActiveThemePrefix() string          { return semstyle.ActiveThemePrefix() }
 func WithTint(ctx context.Context, key string) context.Context {
 	return semstyle.WithTint(ctx, key)
 }
+func ReleaseTintKey(key string)                { semstyle.ReleaseTintKey(key) }
 func SetDeferTints(on bool)                    { semstyle.SetDeferTints(on) }
 func DeferTints() bool                         { return semstyle.DeferTints() }
 func ResolveTints(s, defaultKey string) string { return semstyle.ResolveTints(s, defaultKey) }

@@ -116,6 +116,56 @@ func TestDeferredTintsLiteralColorNudged(t *testing.T) {
 	}
 }
 
+func TestReleaseTintKeyReusesID(t *testing.T) {
+	first, ok := paletteID("test-release-a")
+	if !ok {
+		t.Fatal("want an ID")
+	}
+	RegisterTint("test-release-a", Palette{Cyan: "#001122"})
+	stale, _ := placeholderHex("test-release-a", "cyan")
+	ReleaseTintKey("test-release-a")
+	if _, ok := getTint("test-release-a"); ok {
+		t.Error("ReleaseTintKey should unregister the tint")
+	}
+	if got := ResolveTints("\x1b[38;2;"+rgbParams(stale)+"mx", ""); !strings.Contains(got, "\x1b[36m") {
+		t.Errorf("a released key's placeholder should resolve untinted, got %q", got)
+	}
+	reused, _ := paletteID("test-release-b")
+	defer ReleaseTintKey("test-release-b")
+	if reused != first {
+		t.Errorf("a released ID should be reused, got %d want %d", reused, first)
+	}
+}
+
+func TestPaletteIDsLimitInUseKeys(t *testing.T) {
+	var keys []string
+	defer func() {
+		for _, k := range keys {
+			ReleaseTintKey(k)
+		}
+	}()
+	for i := 0; ; i++ {
+		k := "test-limit-" + strconv.Itoa(i)
+		if _, ok := paletteID(k); !ok {
+			break
+		}
+		keys = append(keys, k)
+		if i > placeholderMaxIDs {
+			t.Fatal("IDs should run out")
+		}
+	}
+	ReleaseTintKey(keys[0])
+	if _, ok := paletteID("test-limit-again"); !ok {
+		t.Error("releasing a key should make room for another")
+	}
+	keys[0] = "test-limit-again"
+}
+
+func rgbParams(hex string) string {
+	r, g, b, _ := parseHex(hex)
+	return strconv.Itoa(r) + ";" + strconv.Itoa(g) + ";" + strconv.Itoa(b)
+}
+
 func TestNearBlackIsNotAPlaceholder(t *testing.T) {
 	for _, in := range []string{"\x1b[38;2;1;0;0mx", "\x1b[48;2;1;1;1mx", "\x1b[38;2;1;2;3mx"} {
 		if got := ResolveTints(in, ""); got != in {

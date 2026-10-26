@@ -53,10 +53,11 @@ var (
 	paletteMu   sync.RWMutex
 	paletteIDs  = map[string]int{"": 0}
 	paletteKeys = []string{""}
+	freeIDs     []int // released IDs (see ReleaseTintKey), reused first
 )
 
-// paletteID returns key's palette ID, assigning the next free one the first
-// time key is seen. ok is false once all placeholderMaxIDs IDs are taken.
+// paletteID returns key's palette ID, assigning a free one the first time
+// key is seen. ok is false when all placeholderMaxIDs IDs are in use.
 func paletteID(key string) (id int, ok bool) {
 	paletteMu.RLock()
 	id, ok = paletteIDs[key]
@@ -69,12 +70,17 @@ func paletteID(key string) (id int, ok bool) {
 	if id, ok = paletteIDs[key]; ok {
 		return id, true
 	}
-	if len(paletteKeys) >= placeholderMaxIDs {
+	switch {
+	case len(freeIDs) > 0:
+		id, freeIDs = freeIDs[len(freeIDs)-1], freeIDs[:len(freeIDs)-1]
+		paletteKeys[id] = key
+	case len(paletteKeys) < placeholderMaxIDs:
+		id = len(paletteKeys)
+		paletteKeys = append(paletteKeys, key)
+	default:
 		return 0, false
 	}
-	id = len(paletteKeys)
 	paletteIDs[key] = id
-	paletteKeys = append(paletteKeys, key)
 	return id, true
 }
 
@@ -86,6 +92,27 @@ func paletteKey(id int) (string, bool) {
 		return "", false
 	}
 	return paletteKeys[id], true
+}
+
+// ReleaseTintKey unregisters key's tint (see UnregisterTint) and frees the
+// placeholder ID deferred tints use for it, for reuse by another key. Call it
+// only once nothing will render or resolve with key again: a placeholder
+// already rendered for key would otherwise take on the colors of whichever
+// key reuses its ID. Use UnregisterTint to drop a tint that key may get back.
+func ReleaseTintKey(key string) {
+	UnregisterTint(key)
+	if key == "" {
+		return
+	}
+	paletteMu.Lock()
+	defer paletteMu.Unlock()
+	id, ok := paletteIDs[key]
+	if !ok {
+		return
+	}
+	delete(paletteIDs, key)
+	paletteKeys[id] = ""
+	freeIDs = append(freeIDs, id)
 }
 
 // placeholderSlot returns the slot number for colorName (already lowercased),
