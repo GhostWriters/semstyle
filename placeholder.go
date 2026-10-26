@@ -18,12 +18,19 @@ import (
 // (a cache, a scrollback buffer) always shows the tint that is current when
 // it is drawn.
 //
-// A placeholder is #01PPSS: red 0x01 marks it, PP is the tint key's palette
-// ID (see paletteID), and SS is the slot -- 0-15 the ANSI colors, then the
-// eight base24 slots with no ANSI index, in placeholderExtraSlots order.
-// Palette ID 0 is "no key": it resolves to ResolveTints' default key.
+// A placeholder is #01PPSS: red 0x01 marks it, PP is placeholderIDBase plus
+// the tint key's palette ID (see paletteID), and SS is placeholderSlotBase
+// plus the slot -- 0-15 the ANSI colors, then the eight base24 slots with no
+// ANSI index, in placeholderExtraSlots order. Palette ID 0 is "no key": it
+// resolves to ResolveTints' default key. The high green and blue keep
+// placeholders away from the near-black colors real output uses.
 
-const placeholderMarker = 0x01
+const (
+	placeholderMarker   = 0x01
+	placeholderIDBase   = 0xc0
+	placeholderSlotBase = 0xe0
+	placeholderMaxIDs   = 0x100 - placeholderIDBase
+)
 
 // placeholderExtraSlots are the slots after the 16 ANSI colors, in slot
 // order (16, 17, ...).
@@ -46,10 +53,11 @@ var (
 	paletteMu   sync.RWMutex
 	paletteIDs  = map[string]int{"": 0}
 	paletteKeys = []string{""}
+	freeIDs     []int // released IDs (see ReleaseTintKey), reused first
 )
 
-// paletteID returns key's palette ID, assigning the next free one the first
-// time key is seen. ok is false once all 256 IDs are taken.
+// paletteID returns key's palette ID, assigning a free one the first time
+// key is seen. ok is false when all placeholderMaxIDs IDs are in use.
 func paletteID(key string) (id int, ok bool) {
 	paletteMu.RLock()
 	id, ok = paletteIDs[key]
@@ -62,12 +70,17 @@ func paletteID(key string) (id int, ok bool) {
 	if id, ok = paletteIDs[key]; ok {
 		return id, true
 	}
-	if len(paletteKeys) > 0xff {
+	switch {
+	case len(freeIDs) > 0:
+		id, freeIDs = freeIDs[len(freeIDs)-1], freeIDs[:len(freeIDs)-1]
+		paletteKeys[id] = key
+	case len(paletteKeys) < placeholderMaxIDs:
+		id = len(paletteKeys)
+		paletteKeys = append(paletteKeys, key)
+	default:
 		return 0, false
 	}
-	id = len(paletteKeys)
 	paletteIDs[key] = id
-	paletteKeys = append(paletteKeys, key)
 	return id, true
 }
 
@@ -79,6 +92,27 @@ func paletteKey(id int) (string, bool) {
 		return "", false
 	}
 	return paletteKeys[id], true
+}
+
+// ReleaseTintKey unregisters key's tint (see UnregisterTint) and frees the
+// placeholder ID deferred tints use for it, for reuse by another key. Call it
+// only once nothing will render or resolve with key again: a placeholder
+// already rendered for key would otherwise take on the colors of whichever
+// key reuses its ID. Use UnregisterTint to drop a tint that key may get back.
+func ReleaseTintKey(key string) {
+	UnregisterTint(key)
+	if key == "" {
+		return
+	}
+	paletteMu.Lock()
+	defer paletteMu.Unlock()
+	id, ok := paletteIDs[key]
+	if !ok {
+		return
+	}
+	delete(paletteIDs, key)
+	paletteKeys[id] = ""
+	freeIDs = append(freeIDs, id)
 }
 
 // placeholderSlot returns the slot number for colorName (already lowercased),
@@ -120,7 +154,13 @@ func placeholderHex(key, colorName string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return fmt.Sprintf("#%02x%02x%02x", placeholderMarker, id, slot), true
+	return encodePlaceholder(id, slot), true
+}
+
+// encodePlaceholder returns the "#rrggbb" placeholder for palette ID id and
+// slot.
+func encodePlaceholder(id, slot int) string {
+	return fmt.Sprintf("#%02x%02x%02x", placeholderMarker, placeholderIDBase+id, placeholderSlotBase+slot)
 }
 
 // deferredColor returns the placeholder to render for colorName (already
@@ -132,15 +172,15 @@ func deferredColor(key, colorName string) (string, bool) {
 	return placeholderHex(key, colorName)
 }
 
-// avoidPlaceholder nudges a literal "#rrggbb" color whose red channel is the
-// placeholder marker, so it can never be mistaken for a placeholder. Any
-// other value is returned unchanged.
+// avoidPlaceholder nudges a literal "#rrggbb" color in the placeholder range,
+// so it can never be mistaken for a placeholder. Any other value is returned
+// unchanged.
 func avoidPlaceholder(hex string) string {
 	if !DeferTints() {
 		return hex
 	}
 	r, g, b, ok := parseHex(hex)
-	if !ok || r != placeholderMarker {
+	if !ok || r != placeholderMarker || g < placeholderIDBase || b < placeholderSlotBase {
 		return hex
 	}
 	return fmt.Sprintf("#%02x%02x%02x", r+1, g, b)
@@ -149,16 +189,17 @@ func avoidPlaceholder(hex string) string {
 // decodePlaceholder reports whether r, g, b is a placeholder, and its
 // palette ID and slot.
 func decodePlaceholder(r, g, b int) (id, slot int, ok bool) {
-	if r != placeholderMarker {
+	if r != placeholderMarker || g < placeholderIDBase || b < placeholderSlotBase {
 		return 0, 0, false
 	}
-	if _, named := slotName(b); !named {
+	id, slot = g-placeholderIDBase, b-placeholderSlotBase
+	if _, named := slotName(slot); !named {
 		return 0, 0, false
 	}
-	if _, known := paletteKey(g); !known {
+	if _, known := paletteKey(id); !known {
 		return 0, 0, false
 	}
-	return g, b, true
+	return id, slot, true
 }
 
 // tintSnapshot resolves placeholders against one snapshot of each palette it
@@ -253,7 +294,7 @@ func BrightPlaceholder(c color.Color) (bright color.Color, ok bool) {
 	if slot < 8 {
 		slot += 8
 	}
-	return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", placeholderMarker, id, slot)), true
+	return lipgloss.Color(encodePlaceholder(id, slot)), true
 }
 
 // ResolveTints returns s with every placeholder in its SGR sequences (see

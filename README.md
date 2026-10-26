@@ -256,6 +256,7 @@ bare string that way.
 | `WithTint(ctx, key)` | Carry a tint key in a context for the `…Ctx` functions |
 | `SetDeferTints(on)` / `DeferTints()` | Render tintable colors as placeholders (see [Deferred tints](#deferred-tints)) |
 | `ResolveTints(s, defaultKey)` | Replace placeholders in finished output with current tint colors |
+| `ReleaseTintKey(key)` | Unregister a tint key that won't be used again and free its placeholder ID |
 | `ResolveColor(c)` / `ResolveColorWithDefault(c, defaultKey)` | A placeholder's current real color, for color math; a keyless placeholder resolves with the active tint key, or `defaultKey` |
 | `BrightPlaceholder(c)` | A placeholder's bright-slot form |
 | `New()` | Create an independent `*Styler` |
@@ -380,10 +381,13 @@ frame := semstyle.ResolveTints(line, "dracula")    // the tint as it is now
 ```
 
 Each region keeps the key that was active when it rendered, so one frame can mix tints.
+Up to 64 tint keys (counting the empty one) can have placeholders at once; call
+`ReleaseTintKey` for a key that's done for good (a closed preview, say) to free its slot.
 Placeholders without a key resolve with `ResolveTints`' default key. Turn deferral on only
 for output that passes through `ResolveTints` before it reaches a terminal.
 
-A placeholder is a truecolor value with red `0x01`; while deferral is on, a literal color in
+A placeholder is a truecolor value with red `0x01` and high green and blue (`#01c0e0` and up),
+away from the near-black colors real output uses; while deferral is on, a literal color in
 that range is nudged by one step so it can't be mistaken for one. Code that needs a color's
 real values (contrast, blending) calls `ResolveColor` first, or `ResolveColorWithDefault` with
 the same default key it passes to `ResolveTints`. Each `ResolveTints` call reads each tint
