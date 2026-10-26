@@ -108,7 +108,7 @@ all `semstyle` package-level functions, constants, and variables are available d
 `RegisterHyperlinkTag`, `BuildColorMap`, `ClearThemeMap`, `SetThemeMap`, `SetRenderPolicy`,
 `SetDelimiters`, `GetPreferredProfile`, `SetPreferredProfile`, the tint functions
 (`RegisterTint`, `SetActiveTint`, `RunWithTint`, `WithTint`, `SetDeferTints`, `ResolveTints`,
-`ResolveColor`, `BrightPlaceholder`, …), `Default`, `New`, all
+`ResolveColor`, `ResolveColorWithDefault`, `BrightPlaceholder`, …), `Default`, `New`, all
 `Code*` constants, and the `SemanticPrefix` / `SemanticSuffix` / `DirectPrefix` /
 `DirectSuffix` delimiter vars.
 

@@ -136,6 +136,35 @@ func TestDeferredTintsToColorAndResolveColor(t *testing.T) {
 	}
 }
 
+func TestTintSnapshotKeepsOnePalette(t *testing.T) {
+	const key = "test-deferred-snapshot"
+	RegisterTint(key, Palette{Blue: "#000011"})
+	defer UnregisterTint(key)
+	id, _ := paletteID(key)
+	snap := newTintSnapshot("")
+	if got := snap.slot(id, 4); got != "#000011" {
+		t.Fatalf("want the registered blue, got %q", got)
+	}
+	RegisterTint(key, Palette{Blue: "#000022"})
+	if got := snap.slot(id, 4); got != "#000011" {
+		t.Errorf("a snapshot should keep the palette it first saw, got %q", got)
+	}
+}
+
+func TestResolveColorWithDefault(t *testing.T) {
+	const key = "test-deferred-colordefault"
+	RegisterTint(key, Palette{Red: "#aa1111"})
+	defer UnregisterTint(key)
+	var c color.Color
+	withDeferredTints(t, "", func() { c = ToColor("red") })
+	if got := ToColorStr(ResolveColorWithDefault(c, key)); got != "#aa1111" {
+		t.Errorf("a keyless placeholder should resolve with the default key, got %s", got)
+	}
+	if got, want := ToColorStr(ResolveColorWithDefault(c, "")), ToColorStr(lipgloss.Color("1")); got != want {
+		t.Errorf("with no default key it should resolve to plain red, got %s", got)
+	}
+}
+
 func TestBrightPlaceholder(t *testing.T) {
 	var c color.Color
 	withDeferredTints(t, "", func() { c = ToColor("yellow") })

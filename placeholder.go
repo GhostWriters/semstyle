@@ -161,18 +161,35 @@ func decodePlaceholder(r, g, b int) (id, slot int, ok bool) {
 	return g, b, true
 }
 
-// resolveSlot returns the hex color the tint for palette ID id sets for
-// slot, or "" when that palette is untinted or doesn't set it.
-func resolveSlot(id, slot int, defaultKey string) string {
-	key, _ := paletteKey(id)
-	if id == 0 {
-		key = defaultKey
+// tintSnapshot resolves placeholders against one snapshot of each palette it
+// looks up, so a tint re-registered partway through resolving one string
+// can't leave that string mixing old and new colors.
+type tintSnapshot struct {
+	defaultKey string
+	palettes   map[int]*Palette // nil entry: that palette ID is untinted
+}
+
+func newTintSnapshot(defaultKey string) *tintSnapshot {
+	return &tintSnapshot{defaultKey: defaultKey, palettes: map[int]*Palette{}}
+}
+
+// slot returns the hex color the tint for palette ID id sets for slot, or ""
+// when that palette is untinted or doesn't set it.
+func (t *tintSnapshot) slot(id, slot int) string {
+	p, seen := t.palettes[id]
+	if !seen {
+		key, _ := paletteKey(id)
+		if id == 0 {
+			key = t.defaultKey
+		}
+		if key != "" {
+			if found, ok := getTint(key); ok {
+				p = &found
+			}
+		}
+		t.palettes[id] = p
 	}
-	if key == "" {
-		return ""
-	}
-	p, ok := getTint(key)
-	if !ok {
+	if p == nil {
 		return ""
 	}
 	name, _ := slotName(slot)
@@ -189,10 +206,18 @@ func untintedIndex(slot int) int {
 	return n
 }
 
-// ResolveColor returns c with a placeholder resolved to the active tint's
-// color (or its ANSI color without one), for code that needs c's real RGB
-// values. Any other color is returned unchanged.
+// ResolveColor is ResolveColorWithDefault with the active tint key (see
+// SetActiveTint) as the default key. Inside a render pass that also passes
+// that key to ResolveTints, both resolve a placeholder the same way.
 func ResolveColor(c color.Color) color.Color {
+	return ResolveColorWithDefault(c, getActiveTintKey())
+}
+
+// ResolveColorWithDefault returns c with a placeholder resolved to its
+// tint's current color (or its ANSI color without one), for code that needs
+// c's real RGB values; a placeholder rendered with no key resolves with
+// defaultKey, as ResolveTints does. Any other color is returned unchanged.
+func ResolveColorWithDefault(c color.Color, defaultKey string) color.Color {
 	if c == nil {
 		return c
 	}
@@ -204,7 +229,7 @@ func ResolveColor(c color.Color) color.Color {
 	if !ok {
 		return c
 	}
-	if hex := resolveSlot(id, slot, getActiveTintKey()); hex != "" {
+	if hex := newTintSnapshot(defaultKey).slot(id, slot); hex != "" {
 		return lipgloss.Color(hex)
 	}
 	return lipgloss.Color(strconv.Itoa(untintedIndex(slot)))
@@ -239,6 +264,7 @@ func ResolveTints(s, defaultKey string) string {
 	if !strings.Contains(s, ";2;1;") {
 		return s
 	}
+	snap := newTintSnapshot(defaultKey)
 	var out strings.Builder
 	out.Grow(len(s))
 	for {
@@ -259,7 +285,7 @@ func ResolveTints(s, defaultKey string) string {
 		params := s[start+2 : end]
 		if s[end] == 'm' && strings.Contains(params, ";2;1;") {
 			out.WriteString("\x1b[")
-			out.WriteString(resolveSGRParams(params, defaultKey))
+			out.WriteString(resolveSGRParams(params, snap))
 		} else {
 			out.WriteString(s[start:end])
 		}
@@ -270,7 +296,7 @@ func ResolveTints(s, defaultKey string) string {
 
 // resolveSGRParams resolves the placeholders in one SGR sequence's
 // semicolon-separated parameters.
-func resolveSGRParams(params, defaultKey string) string {
+func resolveSGRParams(params string, snap *tintSnapshot) string {
 	parts := strings.Split(params, ";")
 	out := make([]string, 0, len(parts))
 	for i := 0; i < len(parts); i++ {
@@ -281,7 +307,7 @@ func resolveSGRParams(params, defaultKey string) string {
 			b, errB := strconv.Atoi(parts[i+4])
 			if errR == nil && errG == nil && errB == nil {
 				if id, slot, ok := decodePlaceholder(r, g, b); ok {
-					out = append(out, resolvedSGR(p, id, slot, defaultKey))
+					out = append(out, resolvedSGR(p, id, slot, snap))
 					i += 4
 					continue
 				}
@@ -294,8 +320,8 @@ func resolveSGRParams(params, defaultKey string) string {
 
 // resolvedSGR returns the SGR parameters for a placeholder of kind 38 (fg),
 // 48 (bg) or 58 (underline).
-func resolvedSGR(kind string, id, slot int, defaultKey string) string {
-	if hex := resolveSlot(id, slot, defaultKey); hex != "" {
+func resolvedSGR(kind string, id, slot int, snap *tintSnapshot) string {
+	if hex := snap.slot(id, slot); hex != "" {
 		if r, g, b, ok := parseHex(hex); ok {
 			return fmt.Sprintf("%s;2;%d;%d;%d", kind, r, g, b)
 		}
