@@ -109,10 +109,18 @@ func TestResolveTintsKeepsOtherParams(t *testing.T) {
 func TestDeferredTintsLiteralColorNudged(t *testing.T) {
 	var c color.Color
 	withDeferredTints(t, "", func() {
-		c = ToColor("#010005")
+		c = ToColor("#01c0e5")
 	})
-	if got := ToColorStr(c); got != "#020005" {
+	if got := ToColorStr(c); got != "#02c0e5" {
 		t.Errorf("a literal color in the placeholder range should be nudged, got %s", got)
+	}
+}
+
+func TestNearBlackIsNotAPlaceholder(t *testing.T) {
+	for _, in := range []string{"\x1b[38;2;1;0;0mx", "\x1b[48;2;1;1;1mx", "\x1b[38;2;1;2;3mx"} {
+		if got := ResolveTints(in, ""); got != in {
+			t.Errorf("near-black truecolor should pass through, %q became %q", in, got)
+		}
 	}
 }
 

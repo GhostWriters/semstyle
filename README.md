@@ -383,7 +383,8 @@ Each region keeps the key that was active when it rendered, so one frame can mix
 Placeholders without a key resolve with `ResolveTints`' default key. Turn deferral on only
 for output that passes through `ResolveTints` before it reaches a terminal.
 
-A placeholder is a truecolor value with red `0x01`; while deferral is on, a literal color in
+A placeholder is a truecolor value with red `0x01` and high green and blue (`#01c0e0` and up),
+away from the near-black colors real output uses; while deferral is on, a literal color in
 that range is nudged by one step so it can't be mistaken for one. Code that needs a color's
 real values (contrast, blending) calls `ResolveColor` first, or `ResolveColorWithDefault` with
 the same default key it passes to `ResolveTints`. Each `ResolveTints` call reads each tint
