@@ -359,11 +359,10 @@ func BeginRenderScope(tintKey, themePrefix string) (restore func()) {
 	}
 }
 
-// tintColorForCtx returns the literal hex value the applicable tint (ctx's,
-// if it carries one via WithTint, else the process-wide active tint set via
-// SetActiveTint) sets for colorName (already lowercased), and whether one
-// was found. Safe to call with a nil ctx.
-func tintColorForCtx(ctx context.Context, colorName string) (string, bool) {
+// tintKeyForCtx returns the applicable tint key: ctx's, if it carries one
+// via WithTint, else the process-wide active tint set via SetActiveTint.
+// Safe to call with a nil ctx.
+func tintKeyForCtx(ctx context.Context) string {
 	key := ""
 	if ctx != nil {
 		key, _ = ctx.Value(tintCtxKey{}).(string)
@@ -371,6 +370,15 @@ func tintColorForCtx(ctx context.Context, colorName string) (string, bool) {
 	if key == "" {
 		key = getActiveTintKey()
 	}
+	return key
+}
+
+// tintColorForCtx returns the literal hex value the applicable tint (ctx's,
+// if it carries one via WithTint, else the process-wide active tint set via
+// SetActiveTint) sets for colorName (already lowercased), and whether one
+// was found. Safe to call with a nil ctx.
+func tintColorForCtx(ctx context.Context, colorName string) (string, bool) {
+	key := tintKeyForCtx(ctx)
 	if key == "" {
 		return "", false
 	}

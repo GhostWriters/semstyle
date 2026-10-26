@@ -138,12 +138,17 @@ func ActiveThemePrefix() string          { return semstyle.ActiveThemePrefix() }
 func WithTint(ctx context.Context, key string) context.Context {
 	return semstyle.WithTint(ctx, key)
 }
-func ToTags(s string, prefix ...string) string { return semstyle.ToTags(s, prefix...) }
-func ToPlain(s string) string                  { return semstyle.ToPlain(s) }
-func StripTags(s string) string                { return semstyle.StripTags(s) }
-func StripANSI(s string) string                { return semstyle.StripANSI(s) }
-func StripDelimiters(s string) string          { return semstyle.StripDelimiters(s) }
-func Sprintf(format string, a ...any) string   { return semstyle.Sprintf(format, a...) }
+func SetDeferTints(on bool)                               { semstyle.SetDeferTints(on) }
+func DeferTints() bool                                    { return semstyle.DeferTints() }
+func ResolveTints(s, defaultKey string) string            { return semstyle.ResolveTints(s, defaultKey) }
+func ResolveColor(c color.Color) color.Color              { return semstyle.ResolveColor(c) }
+func BrightPlaceholder(c color.Color) (color.Color, bool) { return semstyle.BrightPlaceholder(c) }
+func ToTags(s string, prefix ...string) string            { return semstyle.ToTags(s, prefix...) }
+func ToPlain(s string) string                             { return semstyle.ToPlain(s) }
+func StripTags(s string) string                           { return semstyle.StripTags(s) }
+func StripANSI(s string) string                           { return semstyle.StripANSI(s) }
+func StripDelimiters(s string) string                     { return semstyle.StripDelimiters(s) }
+func Sprintf(format string, a ...any) string              { return semstyle.Sprintf(format, a...) }
 func ExpandTagsWithMap(text string, styleMap map[string]string, stripUnresolvable bool, prefix string) string {
 	return semstyle.ExpandTagsWithMap(text, styleMap, stripUnresolvable, prefix)
 }
@@ -186,8 +191,8 @@ func ReplaceThemeTags(keep func(key string) bool, populate func(register func(na
 func ReplaceThemeTagsWithPrefix(prefix string, populate func(register func(name, rawValue string))) {
 	semstyle.ReplaceThemeTagsWithPrefix(prefix, populate)
 }
-func ResetCustomColors()                    { semstyle.ResetCustomColors() }
-func BuildColorMap()                        { semstyle.BuildColorMap() }
+func ResetCustomColors() { semstyle.ResetCustomColors() }
+func BuildColorMap()     { semstyle.BuildColorMap() }
 
 // -- Color utilities --
 

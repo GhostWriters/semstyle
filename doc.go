@@ -98,6 +98,20 @@
 //
 //	semstyle.SetRenderPolicy(func() bool { return isTerminal() })
 //
+// # Tints
+//
+// [RegisterTint] registers a [Palette] under a key; while that key is active
+// ([SetActiveTint], [RunWithTint], or [WithTint] for the …Ctx functions), the
+// 16 standard ANSI colors and the base16/base24 slot names render as the
+// palette's colors instead of plain ANSI codes.
+//
+// Rendered text keeps the tint it was rendered with. For text a program
+// keeps and redraws, turn on [SetDeferTints]: tintable colors then render as
+// placeholders naming the active key and slot, and [ResolveTints] fills in
+// each key's current color in the finished output, so a tint change reaches
+// every kept line on the next draw. [ResolveColor] gives a placeholder's
+// current real color for color math.
+//
 // # Theming
 //
 // The semstyle/theme subpackage parses TOML theme files into style maps.
